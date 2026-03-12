@@ -39,6 +39,7 @@ export default function ArmadaPage() {
                 .from('buses')
                 .select('*')
                 .eq('aktif', true)
+                .eq('tanggal', date)
                 .order('jam_berangkat');
             if (error) throw error;
             setBuses((data as Bus[]) || []);

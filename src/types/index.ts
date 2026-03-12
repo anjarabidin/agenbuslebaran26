@@ -5,6 +5,7 @@ export interface Bus {
     kapasitas: number;
     arah: 'TIMUR' | 'BARAT';
     jam_berangkat: string; // HH:mm
+    tanggal: string; // YYYY-MM-DD
     aktif: boolean;
     created_at: string;
 }

@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { Bus } from '@/types';
 
 const EMPTY_FORM: Omit<Bus, 'id' | 'created_at'> = {
-    kode: '', nama: '', kapasitas: 24, arah: 'TIMUR', jam_berangkat: '18:45', aktif: true,
+    kode: '', nama: '', kapasitas: 24, arah: 'TIMUR', jam_berangkat: '18:45', tanggal: new Date().toISOString().split('T')[0], aktif: true,
 };
 
 export default function AdminBusesPage() {
@@ -33,7 +33,7 @@ export default function AdminBusesPage() {
     useEffect(() => { fetch(); }, [fetch]);
 
     function openEdit(bus: Bus) {
-        setForm({ kode: bus.kode, nama: bus.nama, kapasitas: bus.kapasitas, arah: bus.arah, jam_berangkat: bus.jam_berangkat, aktif: bus.aktif });
+        setForm({ kode: bus.kode, nama: bus.nama, kapasitas: bus.kapasitas, arah: bus.arah, jam_berangkat: bus.jam_berangkat, tanggal: bus.tanggal, aktif: bus.aktif });
         setEditId(bus.id);
         setShowForm(true);
     }
@@ -111,6 +111,7 @@ export default function AdminBusesPage() {
                             />
                             <input className="input-field" type="time" value={form.jam_berangkat} onChange={e => setForm(f => ({ ...f, jam_berangkat: e.target.value }))} style={{ flex: 1 }} />
                         </div>
+                        <input className="input-field" type="date" value={form.tanggal} onChange={e => setForm(f => ({ ...f, tanggal: e.target.value }))} />
                         <select className="input-field" value={form.arah} onChange={e => setForm(f => ({ ...f, arah: e.target.value as 'TIMUR' | 'BARAT' }))}>
                             <option value="TIMUR">TIMUR</option>
                             <option value="BARAT">BARAT</option>
@@ -138,7 +139,9 @@ export default function AdminBusesPage() {
                                 </div>
                                 <p style={{ fontSize: 13, fontWeight: 600, color: '#8B1A1A' }}>{bus.kode}</p>
                                 <p style={{ fontSize: 14, fontWeight: 700, color: '#1A1A1A' }}>{bus.nama}</p>
-                                <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{bus.kapasitas} kursi • {bus.jam_berangkat}</p>
+                                <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                                    📅 {new Date(bus.tanggal + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} • 💺 {bus.kapasitas} kursi • ⏰ {bus.jam_berangkat}
+                                </p>
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <button onClick={(e) => { e.stopPropagation(); openEdit(bus); }} style={{ background: '#f0f4ff', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
