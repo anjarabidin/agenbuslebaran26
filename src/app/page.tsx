@@ -19,7 +19,7 @@ export default function LoginPage() {
     if (session) router.replace('/armada');
   }, [router]);
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !location.trim() || !phone.trim()) {
       setError('Semua kolom harus diisi');
