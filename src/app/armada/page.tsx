@@ -174,7 +174,7 @@ export default function ArmadaPage() {
                     <QrCode size={22} />
                     <span>QR</span>
                 </div>
-                <div className="bottom-nav-item" onClick={() => { }}>
+                <div className="bottom-nav-item" onClick={() => router.push('/laporan')}>
                     <BarChart2 size={22} />
                     <span>Laporan</span>
                 </div>
