@@ -15,6 +15,8 @@ export default function AdminManifestPage() {
     const [bookings, setBookings] = useState<(Booking & { buses: Bus })[]>([]);
     const [loading, setLoading] = useState(false);
     const [groupBy, setGroupBy] = useState<'seat' | 'agent'>('seat');
+    const [selectedBus, setSelectedBus] = useState('');
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && sessionStorage.getItem('admin_auth') !== 'true') {
