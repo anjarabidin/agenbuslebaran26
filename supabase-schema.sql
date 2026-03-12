@@ -77,6 +77,16 @@ CREATE TABLE IF NOT EXISTS bookings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. Tabel Agen
+CREATE TABLE IF NOT EXISTS agents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  location TEXT NOT NULL,
+  last_login TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Pastikan kolom agent_phone ada (antisipasi jika tabel sudah dibuat sebelumnya tanpa kolom ini)
 DO $$
 BEGIN
@@ -310,6 +320,13 @@ BEGIN
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE bookings;
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'agents'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE agents;
+  END IF;
 END $$;
 
 -- ============================================
@@ -320,6 +337,7 @@ ALTER TABLE routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE route_prices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE seats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read
 DROP POLICY IF EXISTS "public read buses" ON buses;
@@ -332,6 +350,8 @@ DROP POLICY IF EXISTS "public read seats" ON seats;
 CREATE POLICY "public read seats" ON seats FOR SELECT TO anon USING (true);
 DROP POLICY IF EXISTS "public read bookings" ON bookings;
 CREATE POLICY "public read bookings" ON bookings FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "public read agents" ON agents;
+CREATE POLICY "public read agents" ON agents FOR SELECT TO anon USING (true);
 
 -- Allow public write (through RPC functions)
 DROP POLICY IF EXISTS "public update seats" ON seats;
@@ -342,6 +362,8 @@ DROP POLICY IF EXISTS "public update bookings" ON bookings;
 CREATE POLICY "public update bookings" ON bookings FOR UPDATE TO anon USING (true);
 DROP POLICY IF EXISTS "public insert seats" ON seats;
 CREATE POLICY "public insert seats" ON seats FOR INSERT TO anon WITH CHECK (true);
+DROP POLICY IF EXISTS "public all agents" ON agents;
+CREATE POLICY "public all agents" ON agents FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- Admin full access
 DROP POLICY IF EXISTS "admin all buses" ON buses;

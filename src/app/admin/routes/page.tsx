@@ -30,13 +30,33 @@ export default function AdminRoutesPage() {
 
     const fetchRoutes = useCallback(async () => {
         let q = supabase.from('routes').select('*, buses(*), route_prices(*)').order('created_at', { ascending: false });
-        if (selectedBus) q = q.eq('bus_id', selectedBus);
+        if (selectedBus) q = q.eq('bus_id', selectedBus);  // Hanya filter jika dipilih
         if (selectedDate) q = q.eq('tanggal_berangkat', selectedDate);
         const { data } = await q;
         setRoutes((data as (Route & { buses: Bus; route_prices: RoutePrice[] })[]) || []);
     }, [selectedBus, selectedDate]);
 
     useEffect(() => { fetchRoutes(); }, [fetchRoutes]);
+
+    function openEdit(route: Route & { buses: Bus; route_prices: RoutePrice[] }) {
+        setEditId(route.id);
+        setForm({
+            bus_id: route.bus_id,
+            kota_asal: route.kota_asal,
+            kota_tujuan: route.kota_tujuan,
+            via_stops: route.via_stops?.join(', ') || '',
+            tanggal_berangkat: route.tanggal_berangkat,
+        });
+        setPrices(route.route_prices?.map(p => ({ tujuan: p.tujuan, harga: p.harga })) || [{ tujuan: '', harga: 0 }]);
+        setShowForm(true);
+    }
+
+    function openAdd() {
+        setEditId(null);
+        setForm({ bus_id: '', kota_asal: 'Demak', kota_tujuan: '', via_stops: '', tanggal_berangkat: new Date().toISOString().split('T')[0] });
+        setPrices([{ tujuan: '', harga: 0 }]);
+        setShowForm(true);
+    }
 
     async function handleSave() {
         if (!form.bus_id || !form.kota_tujuan || prices.some(p => !p.tujuan)) return;
@@ -45,9 +65,23 @@ export default function AdminRoutesPage() {
 
         let routeId = editId;
         if (editId) {
-            await supabase.from('routes').update({ bus_id: form.bus_id, kota_asal: form.kota_asal, kota_tujuan: form.kota_tujuan, via_stops: via, tanggal_berangkat: form.tanggal_berangkat }).eq('id', editId);
+            // MODE EDIT: update rute saja, TIDAK re-init kursi
+            await supabase.from('routes').update({
+                bus_id: form.bus_id,
+                kota_asal: form.kota_asal,
+                kota_tujuan: form.kota_tujuan,
+                via_stops: via,
+                tanggal_berangkat: form.tanggal_berangkat,
+            }).eq('id', editId);
         } else {
-            const { data } = await supabase.from('routes').insert({ bus_id: form.bus_id, kota_asal: form.kota_asal, kota_tujuan: form.kota_tujuan, via_stops: via, tanggal_berangkat: form.tanggal_berangkat }).select().single();
+            // MODE TAMBAH: buat rute baru + init kursi
+            const { data } = await supabase.from('routes').insert({
+                bus_id: form.bus_id,
+                kota_asal: form.kota_asal,
+                kota_tujuan: form.kota_tujuan,
+                via_stops: via,
+                tanggal_berangkat: form.tanggal_berangkat,
+            }).select().single();
             routeId = data?.id;
         }
 
@@ -55,15 +89,17 @@ export default function AdminRoutesPage() {
             // Upsert prices
             await supabase.from('route_prices').delete().eq('route_id', routeId);
             await supabase.from('route_prices').insert(prices.map(p => ({ route_id: routeId!, ...p })));
-            // Init seats if new route
+
+            // Hanya init kursi jika ini RUTE BARU
             if (!editId) {
                 const bus = buses.find(b => b.id === form.bus_id);
                 if (bus) await initSeats(form.bus_id, routeId, bus.kapasitas);
             }
         }
 
-        setMsg(editId ? 'Rute diperbarui' : 'Rute ditambahkan + kursi diinisialisasi');
-        setShowForm(false); setEditId(null);
+        setMsg(editId ? 'Rute berhasil diperbarui' : 'Rute ditambahkan + kursi diinisialisasi');
+        setShowForm(false);
+        setEditId(null);
         setForm({ bus_id: '', kota_asal: 'Demak', kota_tujuan: '', via_stops: '', tanggal_berangkat: new Date().toISOString().split('T')[0] });
         setPrices([{ tujuan: '', harga: 0 }]);
         await fetchRoutes();
@@ -80,7 +116,6 @@ export default function AdminRoutesPage() {
     function addPrice() { setPrices(p => [...p, { tujuan: '', harga: 0 }]); }
     function removePrice(i: number) { setPrices(p => p.filter((_, idx) => idx !== i)); }
 
-    // Helper untuk memformat angka ke format ribuan (titik)
     function formatRibuan(val: number | string) {
         if (!val || val === '0') return '';
         return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -99,7 +134,7 @@ export default function AdminRoutesPage() {
                         <p style={{ fontSize: 11, opacity: 0.7 }}>Admin</p>
                         <h1 style={{ fontSize: 20, fontWeight: 800 }}>Manajemen Rute</h1>
                     </div>
-                    <button onClick={() => { setShowForm(true); setEditId(null); }} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '8px 14px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                    <button onClick={openAdd} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '8px 14px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
                         <Plus size={16} /> Tambah
                     </button>
                 </div>
@@ -116,13 +151,18 @@ export default function AdminRoutesPage() {
                 <input type="date" className="input-field" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ flex: 1, padding: '9px 12px', fontSize: 13 }} />
             </div>
 
-            {/* Form */}
+            {/* Form Tambah / Edit */}
             {showForm && (
                 <div style={{ background: 'white', margin: '10px 16px', borderRadius: 14, padding: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                        <h3 style={{ fontSize: 15, fontWeight: 700 }}>Tambah Rute Baru</h3>
+                        <h3 style={{ fontSize: 15, fontWeight: 700 }}>{editId ? '✏️ Edit Rute' : '➕ Tambah Rute Baru'}</h3>
                         <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
                     </div>
+                    {editId && (
+                        <div style={{ background: '#FFF3E0', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#E65100' }}>
+                            ⚠️ Mode Edit: Kursi yang sudah ada tidak akan direset
+                        </div>
+                    )}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <select className="input-field" value={form.bus_id} onChange={e => setForm(f => ({ ...f, bus_id: e.target.value }))}>
                             <option value="">Pilih Bus</option>
@@ -156,7 +196,7 @@ export default function AdminRoutesPage() {
                         <button onClick={addPrice} style={{ background: 'none', border: '1.5px dashed #ccc', borderRadius: 8, padding: '8px', fontSize: 13, cursor: 'pointer', color: '#888' }}>+ Tambah Tujuan</button>
                     </div>
                     <button className="btn-primary" onClick={handleSave} disabled={loading || !form.bus_id || !form.kota_tujuan} style={{ marginTop: 14 }}>
-                        {loading ? 'Menyimpan...' : '✓ Simpan Rute & Inisialisasi Kursi'}
+                        {loading ? 'Menyimpan...' : editId ? <><Check size={16} style={{ display: 'inline', marginRight: 6 }} />Simpan Perubahan</> : '✓ Simpan Rute & Inisialisasi Kursi'}
                     </button>
                 </div>
             )}
@@ -172,7 +212,10 @@ export default function AdminRoutesPage() {
                                 {route.via_stops?.length > 0 && <p style={{ fontSize: 11, color: '#888' }}>Via: {route.via_stops.join(', ')}</p>}
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={() => handleDelete(route.id)} style={{ background: '#fff0f0', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
+                                <button onClick={(e) => { e.stopPropagation(); openEdit(route); }} style={{ background: '#f0f4ff', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
+                                    <Pencil size={15} color="#1565C0" />
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); handleDelete(route.id); }} style={{ background: '#fff0f0', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
                                     <Trash2 size={15} color="#C62828" />
                                 </button>
                             </div>

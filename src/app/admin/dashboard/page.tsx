@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/utils';
 export default function AdminDashboard() {
     const router = useRouter();
     const [stats, setStats] = useState({ totalBus: 0, totalBooking: 0, totalRevenue: 0, bookedToday: 0 });
+    const [agents, setAgents] = useState<{ id: string, phone: string, name: string, location: string, last_login: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -19,10 +20,11 @@ export default function AdminDashboard() {
 
     const fetchStats = useCallback(async () => {
         const today = new Date().toISOString().split('T')[0];
-        const [busRes, bookingRes, todayRes] = await Promise.all([
+        const [busRes, bookingRes, todayRes, agentRes] = await Promise.all([
             supabase.from('buses').select('id', { count: 'exact' }).eq('aktif', true),
             supabase.from('bookings').select('harga').eq('status', 'confirmed'),
             supabase.from('bookings').select('id', { count: 'exact' }).eq('status', 'confirmed').gte('created_at', `${today}T00:00:00`),
+            supabase.from('agents').select('*').order('last_login', { ascending: false }),
         ]);
         const revenue = (bookingRes.data || []).reduce((s, b) => s + b.harga, 0);
         setStats({
@@ -31,6 +33,7 @@ export default function AdminDashboard() {
             totalRevenue: revenue,
             bookedToday: todayRes.count || 0,
         });
+        setAgents((agentRes.data as any[]) || []);
         setLoading(false);
     }, []);
 
@@ -166,6 +169,69 @@ export default function AdminDashboard() {
                             <ChevronRight size={20} color="#DDD" />
                         </div>
                     ))}
+                </div>
+            </div>
+
+            {/* Registered Agents List */}
+            <div style={{ padding: '0 20px 60px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingLeft: 4 }}>
+                    <p style={{
+                        fontSize: 12,
+                        textTransform: 'uppercase',
+                        letterSpacing: '1px',
+                        color: '#AAA',
+                        fontWeight: 700,
+                        margin: 0
+                    }}>Daftar Agen Terdaftar</p>
+                    <span style={{ fontSize: 11, background: '#EEE', color: '#666', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>{agents.length} AGAN</span>
+                </div>
+
+                <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+                    {loading ? (
+                        <div style={{ padding: 30, textAlign: 'center', color: '#AAA' }}>Memuat agen...</div>
+                    ) : agents.length === 0 ? (
+                        <div style={{ padding: 30, textAlign: 'center', color: '#AAA', fontSize: 13 }}>Belum ada agen terdaftar</div>
+                    ) : (
+                        agents.map((agent, idx) => (
+                            <div key={agent.id} style={{
+                                padding: '16px',
+                                borderBottom: idx < agents.length - 1 ? '1px solid #F5F5F5' : 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 14
+                            }}>
+                                <div style={{
+                                    width: 40,
+                                    height: 40,
+                                    background: '#F0F0F0',
+                                    borderRadius: '12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 18
+                                }}>👤</div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <p style={{ fontSize: 14, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>{agent.name}</p>
+                                        <p style={{ fontSize: 10, color: '#AAA', margin: 0 }}>
+                                            Login: {new Date(agent.last_login).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                                        </p>
+                                    </div>
+                                    <p style={{ fontSize: 12, color: '#666', marginTop: 2, margin: 0 }}>📍 {agent.location}</p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                        <a
+                                            href={`https://wa.me/${agent.phone.replace(/^0/, '62')}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{ color: '#25D366', fontSize: 12, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}
+                                        >
+                                            🟢 {agent.phone}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
         </div>

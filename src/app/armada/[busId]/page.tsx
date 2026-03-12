@@ -15,11 +15,9 @@ type ActiveTab = 'pembelian' | 'manifest' | 'paket';
 function PassengerPopup({
     booking,
     onClose,
-    onMoveRequest,
 }: {
     booking: Booking;
     onClose: () => void;
-    onMoveRequest: () => void;
 }) {
     function handleWA() {
         const cleaned = booking.passenger_phone.replace(/\D/g, '').replace(/^0/, '62');
@@ -89,13 +87,6 @@ function PassengerPopup({
                         style={{ background: '#25D366', color: 'white', border: 'none', borderRadius: 12, padding: '14px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                     >
                         <MessageCircle size={18} /> Cetak Nota via WhatsApp
-                    </button>
-                    {/* Pindah Kursi */}
-                    <button
-                        onClick={onMoveRequest}
-                        style={{ background: '#EDE7F6', color: '#4527A0', border: 'none', borderRadius: 12, padding: '14px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                    >
-                        <ArrowRightLeft size={18} /> Pindah Kursi
                     </button>
                     <button onClick={onClose} className="btn-secondary">Tutup</button>
                 </div>
@@ -305,7 +296,7 @@ function BusDetailContent() {
                         <>
                             <div style={{ padding: '10px 16px', fontSize: 12, color: '#666', background: '#f9f9f9', display: 'flex', justifyContent: 'space-between' }}>
                                 <span>Total {manifests.length} penumpang</span>
-                                <span style={{ color: '#888' }}>Ketuk untuk detail / pindah kursi</span>
+                                <span style={{ color: '#888' }}>Ketuk untuk detail penunpang</span>
                             </div>
                             {manifests.map(b => (
                                 <div
@@ -346,14 +337,6 @@ function BusDetailContent() {
                 <PassengerPopup
                     booking={selectedBooking}
                     onClose={() => setSelectedBooking(null)}
-                    onMoveRequest={() => {
-                        // Navigasi ke seat map dalam mode pindah
-                        // Cari routeId dari bookings
-                        router.push(
-                            `/armada/${busId}/seats?routeId=${selectedBooking.route_id}&tujuan=${encodeURIComponent(selectedBooking.tujuan)}&harga=${selectedBooking.harga}&date=${date}&mode=pindah&bookingId=${selectedBooking.id}&fromNomor=${selectedBooking.nomor_kursi}`
-                        );
-                        setSelectedBooking(null);
-                    }}
                 />
             )}
         </div>

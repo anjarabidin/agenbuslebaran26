@@ -7,7 +7,8 @@ import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, openWhatsApp } from '@/lib/utils';
-import type { Booking, Bus, Route } from '@/types';
+import { getSeats, moveBooking } from '@/lib/db';
+import type { Booking, Bus, Route, Seat } from '@/types';
 
 type BookingWithDetails = Booking & { buses: Bus; routes: Route };
 
@@ -23,6 +24,12 @@ export default function AdminBookingsPage() {
     const [filterAgent, setFilterAgent] = useState('');
     const [filterStatus, setFilterStatus] = useState('confirmed');
     const [cancelling, setCancelling] = useState<string | null>(null);
+
+    // Move seat state
+    const [movingBooking, setMovingBooking] = useState<BookingWithDetails | null>(null);
+    const [availableSeats, setAvailableSeats] = useState<Seat[]>([]);
+    const [loadingSeats, setLoadingSeats] = useState(false);
+    const [moveError, setMoveError] = useState('');
 
     useEffect(() => {
         setFilterDate(format(new Date(), 'yyyy-MM-dd'));
@@ -65,6 +72,39 @@ export default function AdminBookingsPage() {
         await supabase.rpc('cancel_booking', { p_booking_id: bookingId });
         await fetchBookings();
         setCancelling(null);
+    }
+
+    async function handleOpenMove(b: BookingWithDetails) {
+        setMovingBooking(b);
+        setLoadingSeats(true);
+        setMoveError('');
+        try {
+            const allSeats = await getSeats(b.bus_id, b.route_id);
+            setAvailableSeats(allSeats.filter(s => s.status === 'available'));
+        } catch (e) {
+            setMoveError('Gagal memuat daftar kursi');
+        } finally {
+            setLoadingSeats(false);
+        }
+    }
+
+    async function handleConfirmMove(newSeatId: string) {
+        if (!movingBooking) return;
+        setLoadingSeats(true);
+        try {
+            const res = await moveBooking(movingBooking.id, newSeatId, movingBooking.agent_phone);
+            if (res.success) {
+                alert(res.message);
+                setMovingBooking(null);
+                await fetchBookings();
+            } else {
+                setMoveError(res.message);
+            }
+        } catch (e) {
+            setMoveError('Terjadi kesalahan sistem');
+        } finally {
+            setLoadingSeats(false);
+        }
     }
 
     const totalRevenue = bookings.filter(b => b.status === 'confirmed').reduce((s, b) => s + b.harga, 0);
@@ -196,7 +236,15 @@ export default function AdminBookingsPage() {
                                         disabled={cancelling === b.id}
                                         style={{ background: '#ffebee', color: '#C62828', border: 'none', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                                     >
-                                        <XCircle size={15} /> {cancelling === b.id ? '...' : 'Batalkan'}
+                                        <XCircle size={15} /> {cancelling === b.id ? '...' : 'Batal'}
+                                    </button>
+                                )}
+                                {b.status === 'confirmed' && (
+                                    <button
+                                        onClick={() => handleOpenMove(b)}
+                                        style={{ background: '#f0f4ff', color: '#1565C0', border: 'none', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                                    >
+                                        Pindah Kursi
                                     </button>
                                 )}
                             </div>
@@ -204,6 +252,38 @@ export default function AdminBookingsPage() {
                     ))
                 )}
             </div>
+            {/* Modal Pindah Kursi */}
+            {movingBooking && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 400, padding: 20, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Pindahkan Kursi: {movingBooking.passenger_name}</h3>
+                            <button onClick={() => setMovingBooking(null)} style={{ background: 'none', border: 'none' }}><XCircle size={20} color="#888" /></button>
+                        </div>
+                        <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Kursi saat ini: <strong>No. {movingBooking.nomor_kursi}</strong>. Pilih kursi baru:</p>
+
+                        {moveError && <div style={{ background: '#ffebee', color: '#C62828', padding: '10px', borderRadius: 8, marginBottom: 16, fontSize: 12 }}>{moveError}</div>}
+
+                        <div style={{ overflowY: 'auto', flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, paddingBottom: 10 }}>
+                            {loadingSeats ? (
+                                <div style={{ gridColumn: 'span 5', textAlign: 'center', padding: 20, color: '#aaa' }}>Memuat...</div>
+                            ) : availableSeats.length === 0 ? (
+                                <div style={{ gridColumn: 'span 5', textAlign: 'center', padding: 20, color: '#aaa' }}>Penuh</div>
+                            ) : (
+                                availableSeats.map(s => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => handleConfirmMove(s.id)}
+                                        style={{ background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '10px 4px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                                    >
+                                        {s.nomor_kursi}
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

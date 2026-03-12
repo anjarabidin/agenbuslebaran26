@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bus, Phone } from 'lucide-react';
 import { setAgentSession, getAgentSession } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,8 +32,25 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    setAgentSession(name.trim(), location.trim(), cleaned);
-    router.push('/armada');
+    try {
+      // Sync ke tabel agents
+      await supabase.from('agents').upsert({
+        phone: cleaned,
+        name: name.trim(),
+        location: location.trim(),
+        last_login: new Date().toISOString()
+      }, { onConflict: 'phone' });
+
+      setAgentSession(name.trim(), location.trim(), cleaned);
+      router.push('/armada');
+    } catch (err) {
+      console.error('Login sync error:', err);
+      // Tetap lanjutkan login meskipun sync gagal
+      setAgentSession(name.trim(), location.trim(), cleaned);
+      router.push('/armada');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

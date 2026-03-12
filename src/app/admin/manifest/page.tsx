@@ -11,10 +11,9 @@ import type { Bus, Booking } from '@/types';
 export default function AdminManifestPage() {
     const router = useRouter();
     const [buses, setBuses] = useState<Bus[]>([]);
-    const [selectedBus, setSelectedBus] = useState('');
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [bookings, setBookings] = useState<(Booking & { buses: Bus })[]>([]);
     const [loading, setLoading] = useState(false);
+    const [groupBy, setGroupBy] = useState<'seat' | 'agent'>('seat');
 
     useEffect(() => {
         if (typeof window !== 'undefined' && sessionStorage.getItem('admin_auth') !== 'true') {
@@ -43,6 +42,13 @@ export default function AdminManifestPage() {
     const bus = buses.find(b => b.id === selectedBus);
     const displayDate = format(new Date(selectedDate + 'T00:00:00'), "d MMMM yyyy", { locale: idLocale });
 
+    const groupedBookings = bookings.reduce((acc, b) => {
+        const key = b.agent_name || 'Tanpa Agen';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(b);
+        return acc;
+    }, {} as Record<string, typeof bookings>);
+
     return (
         <div style={{ background: 'var(--gray-bg)', minHeight: '100vh' }}>
             <div className="header-maroon" style={{ printVisibility: 'hidden' } as React.CSSProperties}>
@@ -67,6 +73,28 @@ export default function AdminManifestPage() {
                     {buses.map(b => <option key={b.id} value={b.id}>{b.kode} - {b.arah}</option>)}
                 </select>
                 <input type="date" className="input-field" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ flex: 1, padding: '10px 12px', fontSize: 13 }} />
+            </div>
+
+            <div style={{ background: 'white', padding: '0 16px 12px', display: 'flex', gap: 8 }}>
+                {(['seat', 'agent'] as const).map((type) => (
+                    <button
+                        key={type}
+                        onClick={() => setGroupBy(type)}
+                        style={{
+                            flex: 1,
+                            padding: '8px',
+                            borderRadius: 8,
+                            border: '1px solid ' + (groupBy === type ? '#8B1A1A' : '#ddd'),
+                            background: groupBy === type ? '#8B1A1A' : 'white',
+                            color: groupBy === type ? 'white' : '#666',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        {type === 'seat' ? 'Urut Kursi' : 'Kelompok Agen'}
+                    </button>
+                ))}
             </div>
 
             {!selectedBus ? (
@@ -110,20 +138,47 @@ export default function AdminManifestPage() {
                         </div>
                     </div>
 
-                    {/* Table */}
+                    {/* Table / List View */}
                     <div style={{ margin: '0 16px', background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 24 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 90px 70px', background: '#8B1A1A', color: 'white', padding: '10px 12px', fontSize: 11, fontWeight: 700, gap: 4 }}>
-                            <span>No</span><span>Nama</span><span>Tujuan</span><span>Agen</span><span>HP</span>
-                        </div>
-                        {bookings.map((b, i) => (
-                            <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 90px 70px', padding: '10px 12px', fontSize: 12, borderBottom: i < bookings.length - 1 ? '1px solid #f0f0f0' : 'none', gap: 4, background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                                <span style={{ fontWeight: 700, color: '#8B1A1A' }}>{b.nomor_kursi}</span>
-                                <span style={{ fontWeight: 600 }}>{b.passenger_name}</span>
-                                <span style={{ color: '#555' }}>{b.tujuan}</span>
-                                <span style={{ color: '#555' }}>{b.agent_name}</span>
-                                <span style={{ color: '#888', fontSize: 10 }}>{b.passenger_phone.slice(-6)}</span>
-                            </div>
-                        ))}
+                        {groupBy === 'seat' ? (
+                            <>
+                                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 90px 70px', background: '#8B1A1A', color: 'white', padding: '10px 12px', fontSize: 11, fontWeight: 700, gap: 4 }}>
+                                    <span>No</span><span>Nama</span><span>Tujuan</span><span>Agen</span><span>HP</span>
+                                </div>
+                                {bookings.map((b, i) => (
+                                    <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 90px 70px', padding: '10px 12px', fontSize: 12, borderBottom: i < bookings.length - 1 ? '1px solid #f0f0f0' : 'none', gap: 4, background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                                        <span style={{ fontWeight: 700, color: '#8B1A1A' }}>{b.nomor_kursi}</span>
+                                        <span style={{ fontWeight: 600 }}>{b.passenger_name}</span>
+                                        <span style={{ color: '#555' }}>{b.tujuan}</span>
+                                        <span style={{ color: '#555' }}>{b.agent_name}</span>
+                                        <span style={{ color: '#888', fontSize: 10 }}>{b.passenger_phone.slice(-6)}</span>
+                                    </div>
+                                ))}
+                            </>
+                        ) : (
+                            Object.entries(groupedBookings).map(([agentName, agentBookings], idx) => (
+                                <div key={agentName} style={{ borderBottom: idx < Object.keys(groupedBookings).length - 1 ? '4px solid #f0f0f0' : 'none' }}>
+                                    <div style={{ background: '#f5f5f5', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: 13, fontWeight: 800, color: '#8B1A1A' }}>🏪 {agentName}</span>
+                                        <span style={{ fontSize: 11, background: '#8B1A1A', color: 'white', padding: '2px 8px', borderRadius: 10 }}>{agentBookings.length} Penumpang</span>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 70px', background: '#fff', color: '#888', padding: '6px 12px', fontSize: 10, fontWeight: 700, borderBottom: '1px solid #eee' }}>
+                                        <span>No</span><span>Nama</span><span>Tujuan</span><span>Harga</span>
+                                    </div>
+                                    {agentBookings.map((b, i) => (
+                                        <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 70px', padding: '10px 12px', fontSize: 12, borderBottom: i < agentBookings.length - 1 ? '1px solid #f0f0f0' : 'none', gap: 4 }}>
+                                            <span style={{ fontWeight: 700, color: '#8B1A1A' }}>{b.nomor_kursi}</span>
+                                            <span style={{ fontWeight: 600 }}>{b.passenger_name}</span>
+                                            <span style={{ color: '#555' }}>{b.tujuan}</span>
+                                            <span style={{ color: '#2E7D32', fontWeight: 600 }}>{(b.harga / 1000).toFixed(0)}rb</span>
+                                        </div>
+                                    ))}
+                                    <div style={{ padding: '8px 12px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#333', background: '#fff9f9' }}>
+                                        Total: Rp{agentBookings.reduce((sum, b) => sum + b.harga, 0).toLocaleString('id-ID')}
+                                    </div>
+                                </div>
+                            ))
+                        )}
                         {bookings.length === 0 && (
                             <div style={{ padding: '40px 16px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>Belum ada penumpang</div>
                         )}

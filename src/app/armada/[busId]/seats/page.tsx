@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { X, AlertCircle, User, MapPin, ArrowRightLeft } from 'lucide-react';
+import { X, AlertCircle, User, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { getAgentSession, formatCurrency } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { getSeats, lockSeat, releaseSeat, moveBooking } from '@/lib/db';
+import { getSeats, lockSeat, releaseSeat } from '@/lib/db';
 import type { Seat, Bus, Booking } from '@/types';
 
 // Popup info kursi terisi
@@ -68,58 +68,7 @@ function SeatInfoPopup({ seat, booking, onClose }: { seat: Seat; booking: Bookin
     );
 }
 
-// Popup konfirmasi pindah kursi (verifikasi no WA agen)
-function ConfirmMovePopup({
-    fromNomor, toSeat, agentPhone,
-    onConfirm, onCancel, loading, error,
-}: {
-    fromNomor: number; toSeat: Seat; agentPhone: string;
-    onConfirm: (inputPhone: string) => void; onCancel: () => void;
-    loading: boolean; error: string;
-}) {
-    const [inputPhone, setInputPhone] = useState('');
-    return (
-        <>
-            <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }} />
-            <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: 'white', borderRadius: '20px 20px 0 0', padding: '20px 20px calc(20px + env(safe-area-inset-bottom))', zIndex: 201, animation: 'slideUp 0.25s ease-out' }}>
-                <div style={{ width: 40, height: 4, background: '#e0e0e0', borderRadius: 2, margin: '0 auto 18px' }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                    <div style={{ width: 44, height: 44, background: '#EDE7F6', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <ArrowRightLeft size={22} color="#4527A0" />
-                    </div>
-                    <div>
-                        <p style={{ fontSize: 16, fontWeight: 800 }}>Konfirmasi Pindah Kursi</p>
-                        <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
-                            Kursi {fromNomor} → Kursi {toSeat.nomor_kursi}
-                        </p>
-                    </div>
-                </div>
-                <div style={{ background: '#fafafa', borderRadius: 12, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: '#555' }}>
-                    🔐 Masukkan <strong>No WhatsApp</strong> Anda yang terdaftar saat login untuk konfirmasi
-                </div>
-                <input
-                    className="input-field"
-                    type="tel"
-                    placeholder="No WhatsApp Anda (mis: 08123456789)"
-                    value={inputPhone}
-                    onChange={e => setInputPhone(e.target.value)}
-                    style={{ marginBottom: error ? 6 : 12 }}
-                />
-                {error && <p style={{ color: '#C62828', fontSize: 12, marginBottom: 12 }}>⚠️ {error}</p>}
-                <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={onCancel} className="btn-secondary" style={{ flex: 1 }}>Batal</button>
-                    <button
-                        onClick={() => onConfirm(inputPhone.replace(/\D/g, ''))}
-                        disabled={loading || !inputPhone}
-                        style={{ flex: 2, background: '#4527A0', color: 'white', border: 'none', borderRadius: 10, padding: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-                    >
-                        {loading ? 'Memindahkan...' : 'Konfirmasi Pindah'}
-                    </button>
-                </div>
-            </div>
-        </>
-    );
-}
+// ===== Wrapper for Suspense =====
 
 // ===== Wrapper for Suspense =====
 export default function SeatsPage() {
@@ -141,20 +90,12 @@ function SeatsPageContent() {
     const [tujuan, setTujuan] = useState('');
     const [harga, setHarga] = useState(0);
     const [date, setDate] = useState('');
-    const [mode, setMode] = useState('beli');
-    const [bookingId, setBookingId] = useState('');
-    const [fromNomor, setFromNomor] = useState(0);
-
-    const isPindahMode = mode === 'pindah';
 
     useEffect(() => {
         setRouteId(searchParams.get('routeId') || '');
         setTujuan(searchParams.get('tujuan') || '');
         setHarga(parseInt(searchParams.get('harga') || '0'));
         setDate(searchParams.get('date') || format(new Date(), 'yyyy-MM-dd'));
-        setMode(searchParams.get('mode') || 'beli');
-        setBookingId(searchParams.get('bookingId') || '');
-        setFromNomor(parseInt(searchParams.get('fromNomor') || '0'));
     }, [searchParams]);
 
     const [agent, setAgent] = useState<{ name: string; location: string; phone: string } | null>(null);
@@ -166,14 +107,8 @@ function SeatsPageContent() {
     const [error, setError] = useState('');
     const [lockedBySelf, setLockedBySelf] = useState<string | null>(null);
 
-    // Popup info kursi terisi
     const [popupSeat, setPopupSeat] = useState<Seat | null>(null);
     const [popupBooking, setPopupBooking] = useState<Booking | null>(null);
-
-    // Popup konfirmasi pindah
-    const [showConfirmMove, setShowConfirmMove] = useState(false);
-    const [moveLoading, setMoveLoading] = useState(false);
-    const [moveError, setMoveError] = useState('');
 
     useEffect(() => {
         const session = getAgentSession();
@@ -220,13 +155,7 @@ function SeatsPageContent() {
 
     async function handleSeatClick(seat: Seat) {
         if (seat.status === 'booked') {
-            if (isPindahMode) {
-                // Dalam mode pindah, kursi booked tidak bisa dipilih sebagai tujuan
-                setError('Pilih kursi yang tersedia (putih)');
-                setTimeout(() => setError(''), 2000);
-            } else {
-                showBookedInfo(seat);
-            }
+            showBookedInfo(seat);
             return;
         }
 
@@ -256,33 +185,10 @@ function SeatsPageContent() {
         setSelectedSeat(seat);
     }
 
-    async function handleConfirmMove(inputPhone: string) {
-        if (!selectedSeat || !agent) return;
-        setMoveLoading(true);
-        setMoveError('');
-
-        const result = await moveBooking(bookingId, selectedSeat.id, inputPhone);
-        setMoveLoading(false);
-
-        if (!result.success) {
-            setMoveError(result.message);
-            return;
-        }
-
-        // Sukses - arahkan kembali ke manifest
-        setShowConfirmMove(false);
-        router.replace(`/armada/${busId}?date=${date}&tab=manifest`);
-    }
-
     function handleContinue() {
         if (!selectedSeat) return;
-        if (isPindahMode) {
-            // Minta konfirmasi no WA sebelum pindah
-            setShowConfirmMove(true);
-            return;
-        }
         router.push(
-            `/armada/${busId}/booking?seatId=${selectedSeat.id}&routeId=${routeId}&tujuan=${encodeURIComponent(tujuan)}&harga=${harga}&nomor=${selectedSeat.nomor_kursi}&date=${date}`
+            `/armada/${busId}/seats/booking?seatId=${selectedSeat.id}&routeId=${routeId}&tujuan=${encodeURIComponent(tujuan)}&harga=${harga}&nomor=${selectedSeat.nomor_kursi}&date=${date}`
         );
     }
 
@@ -295,7 +201,7 @@ function SeatsPageContent() {
             if (seat.locked_by_agent === agent?.name) return { fill: '#8B1A1A', stroke: '#8B1A1A' };
             return { fill: '#E67E22', stroke: '#E67E22' };
         }
-        if (isSelected) return { fill: isPindahMode ? '#4527A0' : '#8B1A1A', stroke: isPindahMode ? '#4527A0' : '#8B1A1A' };
+        if (isSelected) return { fill: '#8B1A1A', stroke: '#8B1A1A' };
         return { fill: '#EFEFEF', stroke: '#CCCCCC' };
     }
 
@@ -305,16 +211,15 @@ function SeatsPageContent() {
     }
 
     function renderSingleSeat(seat: Seat) {
-        const isFromSeat = isPindahMode && seat.nomor_kursi === fromNomor;
-        const sStyle = isFromSeat ? { fill: '#E67E22', stroke: '#E67E22' } : getSeatStyle(seat);
-        const numColor = (isFromSeat || getSeatStyle(seat).fill !== '#EFEFEF') ? 'white' : '#333';
+        const sStyle = getSeatStyle(seat);
+        const numColor = getSeatStyle(seat).fill !== '#EFEFEF' ? 'white' : '#333';
 
         return (
             <div
                 key={seat.id}
                 className="seat-item"
-                onClick={() => !locking && !isFromSeat && handleSeatClick(seat)}
-                style={{ opacity: isFromSeat ? 0.7 : locking && selectedSeat?.id !== seat.id ? 0.7 : 1, cursor: isFromSeat ? 'not-allowed' : 'pointer' }}
+                onClick={() => !locking && handleSeatClick(seat)}
+                style={{ opacity: locking && selectedSeat?.id !== seat.id ? 0.7 : 1, cursor: 'pointer' }}
             >
                 <svg width="50" height="50" viewBox="0 0 56 56">
                     <rect x="8" y="6" width="40" height="26" rx="6" fill={sStyle.fill} stroke={sStyle.stroke} strokeWidth="1.5" />
@@ -328,7 +233,7 @@ function SeatsPageContent() {
                     </text>
                 </svg>
                 <span style={{ fontSize: 9, color: seat.status === 'booked' ? '#C0392B' : '#888', marginTop: 1, fontWeight: 600 }}>
-                    {isFromSeat ? 'asal' : getSeatLabel(seat)}
+                    {getSeatLabel(seat)}
                 </span>
             </div>
         );
@@ -349,14 +254,13 @@ function SeatsPageContent() {
     return (
         <div style={{ background: 'var(--gray-bg)', minHeight: '100vh' }}>
             {/* Header */}
-            <div style={{ background: isPindahMode ? '#4527A0' : 'white', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 50 }}>
+            <div style={{ background: 'white', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 50 }}>
                 <button onClick={() => { if (lockedBySelf) releaseSeat(lockedBySelf).catch(() => { }); router.back(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-                    <X size={20} color={isPindahMode ? 'white' : '#333'} />
+                    <X size={20} color="#333" />
                 </button>
                 <div>
-                    {isPindahMode && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 2 }}>MODE PINDAH KURSI</p>}
-                    <p style={{ fontSize: 13, color: isPindahMode ? 'white' : '#888' }}>
-                        {isPindahMode ? `Dari Kursi No. ${fromNomor} → pilih kursi baru` : displayDate}
+                    <p style={{ fontSize: 13, color: '#888' }}>
+                        {displayDate}
                     </p>
                 </div>
             </div>
@@ -377,17 +281,15 @@ function SeatsPageContent() {
 
             {/* Deck label */}
             <div style={{ margin: '0 16px 8px' }}>
-                <span style={{ background: isPindahMode ? '#4527A0' : '#8B1A1A', color: 'white', padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
-                    {isPindahMode ? `PILIH KURSI BARU (dari No. ${fromNomor})` : 'D-BAWAH'}
+                <span style={{ background: '#8B1A1A', color: 'white', padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
+                    D-BAWAH
                 </span>
             </div>
 
             {/* Hint */}
-            {!isPindahMode && (
-                <div style={{ margin: '0 16px 8px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#795548' }}>
-                    💡 Klik kursi <strong>merah</strong> untuk lihat info agen & tujuan
-                </div>
-            )}
+            <div style={{ margin: '0 16px 8px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#795548' }}>
+                💡 Klik kursi <strong>merah</strong> untuk lihat info agen & tujuan
+            </div>
 
             {/* Error */}
             {error && (
@@ -464,17 +366,12 @@ function SeatsPageContent() {
 
             {/* Legend */}
             <div style={{ display: 'flex', gap: 12, padding: '12px 16px', background: 'white', margin: '8px 0', justifyContent: 'center', flexWrap: 'wrap' }}>
-                {(isPindahMode ? [
-                    { color: '#EFEFEF', label: 'Tersedia' },
-                    { color: '#4527A0', label: 'Dipilih' },
-                    { color: '#E67E22', label: 'Kursi Asal' },
-                    { color: '#C0392B', label: 'Terisi' },
-                ] : [
+                {[
                     { color: '#EFEFEF', label: 'Tersedia' },
                     { color: '#8B1A1A', label: 'Dipilih' },
                     { color: '#C0392B', label: 'Terisi' },
                     { color: '#E67E22', label: 'Diproses' },
-                ]).map(l => (
+                ].map(l => (
                     <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <div style={{ width: 14, height: 14, background: l.color, borderRadius: 3, border: '1px solid #ccc' }} />
                         <span style={{ fontSize: 11, color: '#666' }}>{l.label}</span>
@@ -489,19 +386,19 @@ function SeatsPageContent() {
                 {selectedSeat ? (
                     <>
                         <div style={{ flex: 1 }}>
-                            <p style={{ fontSize: 12, color: '#888' }}>{isPindahMode ? 'Pindah ke kursi' : 'Kursi dipilih'}</p>
-                            <p style={{ fontSize: 16, fontWeight: 700, color: isPindahMode ? '#4527A0' : '#8B1A1A' }}>No. {selectedSeat.nomor_kursi}</p>
+                            <p style={{ fontSize: 12, color: '#888' }}>Kursi dipilih</p>
+                            <p style={{ fontSize: 16, fontWeight: 700, color: '#8B1A1A' }}>No. {selectedSeat.nomor_kursi}</p>
                         </div>
                         <button
-                            style={{ background: isPindahMode ? '#4527A0' : 'var(--maroon)', color: 'white', border: 'none', borderRadius: 10, padding: '14px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                            style={{ background: 'var(--maroon)', color: 'white', border: 'none', borderRadius: 10, padding: '14px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
                             onClick={handleContinue}
                         >
-                            {isPindahMode ? 'PINDAH KURSI' : 'LANJUTKAN PEMBELIAN'}
+                            LANJUTKAN PEMBELIAN
                         </button>
                     </>
                 ) : (
                     <button className="btn-primary" disabled>
-                        {isPindahMode ? 'PILIH KURSI TUJUAN' : 'PILIH KURSI TERLEBIH DAHULU'}
+                        PILIH KURSI TERLEBIH DAHULU
                     </button>
                 )}
             </div>
@@ -509,19 +406,6 @@ function SeatsPageContent() {
             {/* Popup info kursi terisi (mode beli only) */}
             {popupSeat && (
                 <SeatInfoPopup seat={popupSeat} booking={popupBooking} onClose={() => { setPopupSeat(null); setPopupBooking(null); }} />
-            )}
-
-            {/* Popup konfirmasi pindah kursi (mode pindah) */}
-            {showConfirmMove && selectedSeat && (
-                <ConfirmMovePopup
-                    fromNomor={fromNomor}
-                    toSeat={selectedSeat}
-                    agentPhone={agent?.phone || ''}
-                    onConfirm={handleConfirmMove}
-                    onCancel={() => { setShowConfirmMove(false); setMoveError(''); }}
-                    loading={moveLoading}
-                    error={moveError}
-                />
             )}
         </div>
     );

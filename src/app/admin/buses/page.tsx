@@ -141,10 +141,10 @@ export default function AdminBusesPage() {
                                 <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{bus.kapasitas} kursi • {bus.jam_berangkat}</p>
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={() => openEdit(bus)} style={{ background: '#f0f4ff', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
+                                <button onClick={(e) => { e.stopPropagation(); openEdit(bus); }} style={{ background: '#f0f4ff', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
                                     <Pencil size={15} color="#1565C0" />
                                 </button>
-                                <button onClick={() => handleDelete(bus.id, bus.kode)} style={{ background: '#fff0f0', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
+                                <button onClick={(e) => { e.stopPropagation(); handleDelete(bus.id, bus.kode); }} style={{ background: '#fff0f0', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
                                     <Trash2 size={15} color="#C62828" />
                                 </button>
                             </div>
