@@ -34,7 +34,13 @@ export default function AdminDashboard() {
             totalRevenue: revenue,
             bookedToday: todayRes.count || 0,
         });
-        setAgents((agentRes.data as any[]) || []);
+        if (agentRes.error) {
+            console.error('Error fetching agents:', agentRes.error);
+            setAgents([]);
+        } else {
+            console.log('Fetched agents:', agentRes.data);
+            setAgents((agentRes.data as any[]) || []);
+        }
         setLoading(false);
     }, []);
 

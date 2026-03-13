@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Archive, X, Check, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Bus } from '@/types';
 
@@ -18,6 +18,8 @@ export default function AdminBusesPage() {
     const [editId, setEditId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
+    const [filterDate, setFilterDate] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         if (typeof window !== 'undefined' && sessionStorage.getItem('admin_auth') !== 'true') {
@@ -26,9 +28,17 @@ export default function AdminBusesPage() {
     }, [router]);
 
     const fetch = useCallback(async () => {
-        const { data } = await supabase.from('buses').select('*').order('jam_berangkat');
-        setBuses((data as Bus[]) || []);
-    }, []);
+        let q = supabase.from('buses').select('*').order('tanggal', { ascending: false }).order('jam_berangkat');
+        if (filterDate) q = q.eq('tanggal', filterDate);
+        const { data } = await q;
+        let res = (data as Bus[]) || [];
+        
+        if (searchTerm) {
+            const low = searchTerm.toLowerCase();
+            res = res.filter(b => b.kode.toLowerCase().includes(low) || b.nama.toLowerCase().includes(low));
+        }
+        setBuses(res);
+    }, [filterDate, searchTerm]);
 
     useEffect(() => { fetch(); }, [fetch]);
 
@@ -54,10 +64,18 @@ export default function AdminBusesPage() {
         setTimeout(() => setMsg(''), 2000);
     }
 
-    async function handleDelete(id: string, kode: string) {
-        if (!confirm(`Hapus bus ${kode}? Semua data rute dan kursi akan ikut terhapus.`)) return;
-        await supabase.from('buses').delete().eq('id', id);
+    async function handleArchive(id: string, kode: string) {
+        if (!confirm(`Arsipkan bus ${kode}? Bus tidak akan muncul bagi agen namun semua data riwayat tetap tersimpan aman.`)) return;
+        setLoading(true);
+        const { error } = await supabase.from('buses').update({ aktif: false }).eq('id', id);
+        if (error) {
+            alert(`Gagal mengarsipkan: ${error.message}`);
+        } else {
+            setMsg(`Bus ${kode} berhasil diarsipkan`);
+            setTimeout(() => setMsg(''), 3000);
+        }
         await fetch();
+        setLoading(false);
     }
 
     function formatNumber(val: number | string) {
@@ -86,6 +104,39 @@ export default function AdminBusesPage() {
             </div>
 
             {msg && <div style={{ margin: '10px 16px', background: '#E8F5E9', borderRadius: 8, padding: '10px 14px', color: '#2E7D32', fontSize: 13, fontWeight: 600 }}>✓ {msg}</div>}
+
+            {/* Filter Section */}
+            <div style={{ background: 'white', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10, borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                        <input 
+                            type="date" 
+                            className="input-field" 
+                            value={filterDate} 
+                            onChange={e => setFilterDate(e.target.value)} 
+                            style={{ padding: '9px 12px', fontSize: 13 }} 
+                        />
+                    </div>
+                    <div style={{ flex: 1.5 }}>
+                        <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Cari Kode / Nama..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            style={{ padding: '9px 12px', fontSize: 13 }} 
+                        />
+                    </div>
+                </div>
+                {(filterDate || searchTerm) && (
+                    <button 
+                        onClick={() => { setFilterDate(''); setSearchTerm(''); }}
+                        style={{ background: 'none', border: 'none', color: '#8B1A1A', fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'right' }}
+                    >
+                        ✕ Bersihkan Filter
+                    </button>
+                )}
+            </div>
 
             {/* Form */}
             {showForm && (
@@ -143,12 +194,20 @@ export default function AdminBusesPage() {
                                     📅 {new Date(bus.tanggal + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} • 💺 {bus.kapasitas} kursi • ⏰ {bus.jam_berangkat}
                                 </p>
                             </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={(e) => { e.stopPropagation(); openEdit(bus); }} style={{ background: '#f0f4ff', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
-                                    <Pencil size={15} color="#1565C0" />
+                            <div style={{ display: 'flex', gap: 10, alignSelf: 'center' }}>
+                                <button 
+                                    onClick={() => openEdit(bus)} 
+                                    style={{ background: '#f0f4ff', border: 'none', borderRadius: 10, padding: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    title="Edit"
+                                >
+                                    <Pencil size={18} color="#1565C0" />
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete(bus.id, bus.kode); }} style={{ background: '#fff0f0', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
-                                    <Trash2 size={15} color="#C62828" />
+                                <button 
+                                    onClick={() => handleArchive(bus.id, bus.kode)} 
+                                    style={{ background: '#fff0f0', border: 'none', borderRadius: 10, padding: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    title="Arsipkan"
+                                >
+                                    <Archive size={18} color="#C62828" />
                                 </button>
                             </div>
                         </div>

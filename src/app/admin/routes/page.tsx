@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Archive, X, Check, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
@@ -27,8 +27,27 @@ export default function AdminRoutesPage() {
         if (typeof window !== 'undefined' && sessionStorage.getItem('admin_auth') !== 'true') {
             router.replace('/admin');
         }
-        supabase.from('buses').select('*').eq('aktif', true).then(({ data }) => setBuses((data as Bus[]) || []));
     }, [router]);
+
+    const fetchBuses = useCallback(async () => {
+        // Ambil semua bis aktif tanpa filter tanggal agar selalu muncul di pilihan
+        const { data } = await supabase.from('buses')
+            .select('*')
+            .eq('aktif', true)
+            .order('tanggal', { ascending: false })
+            .order('jam_berangkat');
+        setBuses((data as Bus[]) || []);
+    }, []);
+
+    useEffect(() => { fetchBuses(); }, [fetchBuses]);
+
+    // Auto-set tanggal rute sesuai tanggal bis yang dipilih
+    useEffect(() => {
+        if (form.bus_id && !editId) {
+            const b = buses.find(x => x.id === form.bus_id);
+            if (b) setForm(f => ({ ...f, tanggal_berangkat: b.tanggal }));
+        }
+    }, [form.bus_id, buses, editId]);
 
     const fetchRoutes = useCallback(async () => {
         let q = supabase.from('routes').select('*, buses(*), route_prices(*)').order('created_at', { ascending: false });
@@ -109,10 +128,19 @@ export default function AdminRoutesPage() {
         setTimeout(() => setMsg(''), 3000);
     }
 
-    async function handleDelete(id: string) {
-        if (!confirm('Hapus rute ini? Semua kursi dan harga akan terhapus.')) return;
-        await supabase.from('routes').delete().eq('id', id);
+    async function handleArchive(id: string) {
+        if (!confirm('Arsipkan rute ini? Rute tidak akan muncul bagi agen namun riwayat pesanan tetap tersimpan aman.')) return;
+        setLoading(true);
+        // Pastikan tabel rute punya kolom 'aktif'
+        const { error } = await supabase.from('routes').update({ aktif: false }).eq('id', id);
+        if (error) {
+            alert(`Gagal mengarsipkan rute: ${error.message}`);
+        } else {
+            setMsg('Rute berhasil diarsipkan');
+            setTimeout(() => setMsg(''), 3000);
+        }
         await fetchRoutes();
+        setLoading(false);
     }
 
     function addPrice() { setPrices(p => [...p, { tujuan: '', harga: 0 }]); }
@@ -221,12 +249,20 @@ export default function AdminRoutesPage() {
                                 <p style={{ fontSize: 15, fontWeight: 700 }}>{route.kota_asal} → {route.kota_tujuan}</p>
                                 {route.via_stops?.length > 0 && <p style={{ fontSize: 11, color: '#888' }}>Via: {route.via_stops.join(', ')}</p>}
                             </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={(e) => { e.stopPropagation(); openEdit(route); }} style={{ background: '#f0f4ff', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
-                                    <Pencil size={15} color="#1565C0" />
+                            <div style={{ display: 'flex', gap: 10, alignSelf: 'center' }}>
+                                <button 
+                                    onClick={() => openEdit(route)} 
+                                    style={{ background: '#f0f4ff', border: 'none', borderRadius: 10, padding: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    title="Edit"
+                                >
+                                    <Pencil size={18} color="#1565C0" />
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete(route.id); }} style={{ background: '#fff0f0', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer' }}>
-                                    <Trash2 size={15} color="#C62828" />
+                                <button 
+                                    onClick={() => handleArchive(route.id)} 
+                                    style={{ background: '#fff0f0', border: 'none', borderRadius: 10, padding: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    title="Arsipkan"
+                                >
+                                    <Archive size={18} color="#C62828" />
                                 </button>
                             </div>
                         </div>

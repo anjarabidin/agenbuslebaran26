@@ -43,18 +43,23 @@ export default function AdminBookingsPage() {
     }, [router]);
 
     useEffect(() => {
-        supabase.from('buses').select('*').eq('aktif', true).then(({ data }) => setBuses((data as Bus[]) || []));
-    }, []);
+        if (!filterDate) return;
+        supabase.from('buses')
+            .select('*')
+            .eq('tanggal', filterDate)
+            .then(({ data }) => setBuses((data as Bus[]) || []));
+    }, [filterDate]);
 
     const fetchBookings = useCallback(async () => {
         setLoading(true);
+        // Gunakan !inner agar filter tanggal bis memfilter baris bookingnya juga
         let query = supabase
             .from('bookings')
-            .select('*, buses(kode, nama, arah, jam_berangkat), routes(kota_asal, kota_tujuan, via_stops)')
-            .order('created_at', { ascending: false });
+            .select('*, buses!inner(kode, nama, arah, jam_berangkat, tanggal), routes(kota_asal, kota_tujuan, via_stops)')
+            .order('nomor_kursi', { ascending: true });
 
         if (filterDate) {
-            query = query.gte('created_at', `${filterDate}T00:00:00`).lte('created_at', `${filterDate}T23:59:59`);
+            query = query.eq('buses.tanggal', filterDate);
         }
         if (filterBus) query = query.eq('bus_id', filterBus);
         if (filterAgent.trim()) query = query.ilike('agent_name', `%${filterAgent}%`);

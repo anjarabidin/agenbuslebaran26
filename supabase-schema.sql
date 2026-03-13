@@ -19,10 +19,13 @@ CREATE TABLE IF NOT EXISTS buses (
 -- Tambahkan constraint UNIQUE secara terpisah jika belum ada
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'buses_kode_key'
-    ) THEN
-        ALTER TABLE buses ADD CONSTRAINT buses_kode_key UNIQUE (kode);
+    -- Hapus constraint lama
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'buses_kode_key') THEN
+        ALTER TABLE buses DROP CONSTRAINT buses_kode_key;
+    END IF;
+    -- Tambahkan constraint baru (kode + tanggal) agar bis yang sama bisa jalan di hari berbeda
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'buses_kode_tanggal_key') THEN
+        ALTER TABLE buses ADD CONSTRAINT buses_kode_tanggal_key UNIQUE (kode, tanggal);
     END IF;
 END $$;
 
@@ -62,9 +65,9 @@ CREATE TABLE IF NOT EXISTS seats (
 -- 5. Tabel Booking
 CREATE TABLE IF NOT EXISTS bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  seat_id UUID REFERENCES seats(id),
-  route_id UUID NOT NULL REFERENCES routes(id),
-  bus_id UUID NOT NULL REFERENCES buses(id),
+  seat_id UUID REFERENCES seats(id) ON DELETE CASCADE,
+  route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+  bus_id UUID NOT NULL REFERENCES buses(id) ON DELETE CASCADE,
   nomor_kursi INTEGER NOT NULL,
   agent_name TEXT NOT NULL,
   agent_location TEXT NOT NULL,
@@ -384,7 +387,7 @@ INSERT INTO buses (kode, nama, kapasitas, arah, jam_berangkat) VALUES
   ('SHL-06', 'Jepara - Merak', 24, 'TIMUR', '18:45'),
   ('SHL-10', 'Jepara - Bandung', 24, 'BARAT', '18:45'),
   ('SHL-SE2', 'Jepara - Parung (Bogor)', 24, 'BARAT', '18:45')
-ON CONFLICT (kode) DO NOTHING;
+ON CONFLICT (kode, tanggal) DO NOTHING;
 -- 11. Indeks Tambahan untuk Performa
 CREATE INDEX IF NOT EXISTS idx_buses_aktif_jam ON buses(aktif, jam_berangkat);
 CREATE INDEX IF NOT EXISTS idx_routes_bus_tanggal ON routes(bus_id, tanggal_berangkat);
