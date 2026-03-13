@@ -141,17 +141,35 @@ function BusDetailContent() {
     }, [router]);
 
     const fetchData = useCallback(async () => {
-        if (!date) return; // Wait for date to be set
+        if (!date) return;
         setLoading(true);
         try {
-            const [busRes, routesRes] = await Promise.all([
-                supabase.from('buses').select('*').eq('id', busId).single(),
-                supabase.from('routes').select('*, route_prices(*)').eq('bus_id', busId),
-            ]);
-            if (busRes.data) setBus(busRes.data as Bus);
-            if (routesRes.data) {
-                const rts = routesRes.data as (Route & { route_prices: RoutePrice[] })[];
-                setRoutes(rts);
+            // 1. Ambil data bus asli
+            const { data: busData, error: busErr } = await supabase.from('buses').select('*').eq('id', busId).single();
+            if (busErr || !busData) return;
+            setBus(busData as Bus);
+
+            // 2. Ambil rute: prioritas yang link langsung ke bus_id ini
+            // Jika kosong, cari rute yang punya bus.kode sama di tanggal yang sama
+            let { data: rts } = await supabase
+                .from('routes')
+                .select('*, route_prices(*)')
+                .eq('bus_id', busId)
+                .eq('tanggal_berangkat', date);
+
+            if (!rts || rts.length === 0) {
+                const { data: fallback } = await supabase
+                    .from('routes')
+                    .select('*, buses!inner(kode), route_prices(*)')
+                    .eq('tanggal_berangkat', date)
+                    .eq('buses.kode', busData.kode);
+                rts = fallback;
+            }
+
+            if (rts) {
+                setRoutes(rts as (Route & { route_prices: RoutePrice[] })[]);
+                
+                // Fetch kursi kosong untuk setiap rute
                 const counts: Record<string, number> = {};
                 await Promise.all(rts.map(async (r) => {
                     const { count } = await supabase
@@ -161,18 +179,24 @@ function BusDetailContent() {
                 }));
                 setSeatCounts(counts);
             }
+        } catch (err) {
+            console.error('Error fetching bus detail:', err);
         } finally {
             setLoading(false);
         }
     }, [busId, date]);
 
     const fetchManifest = useCallback(async () => {
+        if (!date) return;
         const { data } = await supabase
             .from('bookings').select('*')
-            .eq('bus_id', busId).eq('status', 'confirmed')
+            .eq('bus_id', busId)
+            .eq('status', 'confirmed')
+            .gte('created_at', `${date}T00:00:00`)
+            .lte('created_at', `${date}T23:59:59`)
             .order('nomor_kursi');
         if (data) setManifests(data as Booking[]);
-    }, [busId]);
+    }, [busId, date]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
     useEffect(() => {

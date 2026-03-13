@@ -146,7 +146,11 @@ export default function AdminRoutesPage() {
             <div style={{ background: 'white', padding: '12px 16px', display: 'flex', gap: 8, borderBottom: '1px solid var(--border)' }}>
                 <select className="input-field" value={selectedBus} onChange={e => setSelectedBus(e.target.value)} style={{ flex: 1, padding: '9px 12px', fontSize: 13 }}>
                     <option value="">Semua Bus</option>
-                    {buses.map(b => <option key={b.id} value={b.id}>{b.kode}</option>)}
+                    {buses.map(b => (
+                        <option key={b.id} value={b.id}>
+                            {b.kode} ({format(new Date(b.tanggal + 'T00:00:00'), "d MMM", { locale: idLocale })})
+                        </option>
+                    ))}
                 </select>
                 <input type="date" className="input-field" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ flex: 1, padding: '9px 12px', fontSize: 13 }} />
             </div>
@@ -166,7 +170,11 @@ export default function AdminRoutesPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <select className="input-field" value={form.bus_id} onChange={e => setForm(f => ({ ...f, bus_id: e.target.value }))}>
                             <option value="">Pilih Bus</option>
-                            {buses.map(b => <option key={b.id} value={b.id}>{b.kode} - {b.nama}</option>)}
+                            {buses.map(b => (
+                                <option key={b.id} value={b.id}>
+                                    {b.kode} ({format(new Date(b.tanggal + 'T00:00:00'), "d MMM", { locale: idLocale })}) - {b.nama}
+                                </option>
+                            ))}
                         </select>
                         <input type="date" className="input-field" value={form.tanggal_berangkat} onChange={e => setForm(f => ({ ...f, tanggal_berangkat: e.target.value }))} />
                         <div style={{ display: 'flex', gap: 8 }}>
