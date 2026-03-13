@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { format } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { initSeats } from '@/lib/db';
 import type { Bus, Route, RoutePrice } from '@/types';
