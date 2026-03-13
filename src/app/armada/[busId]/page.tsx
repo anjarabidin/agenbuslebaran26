@@ -146,7 +146,7 @@ function BusDetailContent() {
         try {
             const [busRes, routesRes] = await Promise.all([
                 supabase.from('buses').select('*').eq('id', busId).single(),
-                supabase.from('routes').select('*, route_prices(*)').eq('bus_id', busId).eq('tanggal_berangkat', date),
+                supabase.from('routes').select('*, route_prices(*)').eq('bus_id', busId),
             ]);
             if (busRes.data) setBus(busRes.data as Bus);
             if (routesRes.data) {

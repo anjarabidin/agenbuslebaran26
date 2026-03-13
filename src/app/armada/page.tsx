@@ -22,8 +22,18 @@ export default function ArmadaPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        setDate(format(new Date(), 'yyyy-MM-dd'));
+        const savedDate = sessionStorage.getItem('armada_selected_date');
+        if (savedDate) {
+            setDate(savedDate);
+        } else {
+            setDate(format(new Date(), 'yyyy-MM-dd'));
+        }
     }, []);
+
+    const handleDateChange = (newDate: string) => {
+        setDate(newDate);
+        sessionStorage.setItem('armada_selected_date', newDate);
+    };
 
     useEffect(() => {
         const session = getAgentSession();
@@ -99,7 +109,7 @@ export default function ArmadaPage() {
                     <input
                         type="date"
                         value={date}
-                        onChange={e => setDate(e.target.value)}
+                        onChange={e => handleDateChange(e.target.value)}
                         style={{ border: 'none', outline: 'none', fontSize: 14, color: '#333', background: 'transparent', cursor: 'pointer' }}
                     />
                 </div>
