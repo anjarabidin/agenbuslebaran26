@@ -192,8 +192,6 @@ function BusDetailContent() {
             .from('bookings').select('*')
             .eq('bus_id', busId)
             .eq('status', 'confirmed')
-            .gte('created_at', `${date}T00:00:00`)
-            .lte('created_at', `${date}T23:59:59`)
             .order('nomor_kursi');
         if (data) setManifests(data as Booking[]);
     }, [busId, date]);

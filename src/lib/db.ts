@@ -112,7 +112,13 @@ export async function createBooking(payload: {
         p_catatan: payload.catatan,
     });
     if (error) return { success: false, message: error.message };
-    return data as { success: boolean; booking?: Booking; message: string };
+    
+    // Konversi hasil dari RPC menjadi bentuk yang diharapkan TypeScript (booking.id)
+    return {
+        success: data.success,
+        message: data.message,
+        booking: data.booking_id ? { id: data.booking_id } : undefined
+    } as any;
 }
 
 export async function getAllBookings(filters?: {
