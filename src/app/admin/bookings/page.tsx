@@ -33,7 +33,7 @@ export default function AdminBookingsPage() {
     const [moveError, setMoveError] = useState('');
 
     useEffect(() => {
-        setFilterDate('');
+        setFilterDate(format(new Date(), 'yyyy-MM-dd'));
     }, []);
 
     useEffect(() => {
