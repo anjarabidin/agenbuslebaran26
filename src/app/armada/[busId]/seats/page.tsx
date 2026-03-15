@@ -7,11 +7,34 @@ import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { getAgentSession, formatCurrency } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { getSeats, lockSeat, releaseSeat } from '@/lib/db';
+import { getSeats, lockSeat, releaseSeat, cancelBooking } from '@/lib/db';
 import type { Seat, Bus, Booking } from '@/types';
 
 // Popup info kursi terisi
 function SeatInfoPopup({ seat, booking, onClose }: { seat: Seat; booking: Booking | null; onClose: () => void; }) {
+    const [cancelling, setCancelling] = useState(false);
+    const session = getAgentSession();
+
+    async function handleCancel() {
+        if (!booking || !session) return;
+        if (booking.agent_phone !== session.phone && booking.agent_name !== session.name) {
+            alert('Hanya agen pemesan yang dapat membatalkan tiket ini');
+            return;
+        }
+        if (!confirm(`Batalkan pesanan untuk kursi ${seat.nomor_kursi} (${booking.passenger_name})?`)) return;
+
+        setCancelling(true);
+        try {
+            await cancelBooking(booking.id);
+            onClose();
+        } catch (err) {
+            console.error(err);
+            alert('Gagal membatalkan pesanan');
+        } finally {
+            setCancelling(false);
+        }
+    }
+
     return (
         <>
             <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200 }} />
@@ -19,45 +42,68 @@ function SeatInfoPopup({ seat, booking, onClose }: { seat: Seat; booking: Bookin
                 <div style={{ width: 40, height: 4, background: '#e0e0e0', borderRadius: 2, margin: '0 auto 18px' }} />
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 44, height: 44, background: '#C0392B', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 44, height: 44, background: '#e74c3c', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <span style={{ color: 'white', fontSize: 18, fontWeight: 800 }}>{seat.nomor_kursi}</span>
                         </div>
                         <div>
                             <p style={{ fontSize: 16, fontWeight: 800, color: '#1A1A1A' }}>Kursi No. {seat.nomor_kursi}</p>
-                            <span style={{ display: 'inline-block', background: '#FFEBEE', color: '#C0392B', borderRadius: 20, fontSize: 11, fontWeight: 700, padding: '2px 10px', marginTop: 2 }}>SUDAH TERISI</span>
+                            <span style={{ display: 'inline-block', background: '#FFEBEE', color: '#e74c3c', borderRadius: 20, fontSize: 11, fontWeight: 700, padding: '2px 10px', marginTop: 2 }}>SUDAH TERISI</span>
                         </div>
                     </div>
                     <button onClick={onClose} style={{ background: '#f5f5f5', border: 'none', borderRadius: 8, padding: 8, cursor: 'pointer' }}><X size={18} color="#555" /></button>
                 </div>
                 {booking ? (
-                    <div style={{ background: '#fafafa', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                            <div style={{ width: 36, height: 36, background: '#8B1A1A15', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <User size={18} color="#8B1A1A" />
+                    <>
+                        <div style={{ background: '#fafafa', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                <div style={{ width: 36, height: 36, background: '#8B1A1A15', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <User size={18} color="#8B1A1A" />
+                                </div>
+                                <div>
+                                    <p style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Dipesan oleh Agen</p>
+                                    <p style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A', marginTop: 2 }}>{booking.agent_name}</p>
+                                    <p style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{booking.agent_location}</p>
+                                </div>
                             </div>
-                            <div>
-                                <p style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Dipesan oleh Agen</p>
-                                <p style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A', marginTop: 2 }}>{booking.agent_name}</p>
-                                <p style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{booking.agent_location}</p>
+                            <div style={{ height: 1, background: '#efefef' }} />
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                <div style={{ width: 36, height: 36, background: '#1565C015', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <MapPin size={18} color="#1565C0" />
+                                </div>
+                                <div>
+                                    <p style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Tujuan</p>
+                                    <p style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{booking.tujuan}</p>
+                                    <p style={{ fontSize: 12, color: '#2E7D32', fontWeight: 600, marginTop: 1 }}>{formatCurrency(booking.harga)}</p>
+                                </div>
+                            </div>
+                            <div style={{ height: 1, background: '#efefef' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: '#888' }}>Penumpang</span>
+                                <span style={{ fontWeight: 600 }}>{booking.passenger_name}</span>
                             </div>
                         </div>
-                        <div style={{ height: 1, background: '#efefef' }} />
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                            <div style={{ width: 36, height: 36, background: '#1565C015', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <MapPin size={18} color="#1565C0" />
-                            </div>
-                            <div>
-                                <p style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Tujuan</p>
-                                <p style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{booking.tujuan}</p>
-                                <p style={{ fontSize: 12, color: '#2E7D32', fontWeight: 600, marginTop: 1 }}>{formatCurrency(booking.harga)}</p>
-                            </div>
-                        </div>
-                        <div style={{ height: 1, background: '#efefef' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                            <span style={{ color: '#888' }}>Penumpang</span>
-                            <span style={{ fontWeight: 600 }}>{booking.passenger_name}</span>
-                        </div>
-                    </div>
+                        
+                        {(booking.agent_phone === session?.phone || booking.agent_name === session?.name) && (
+                            <button
+                                onClick={handleCancel}
+                                disabled={cancelling}
+                                style={{
+                                    width: '100%',
+                                    marginTop: 16,
+                                    padding: '14px',
+                                    borderRadius: 12,
+                                    background: '#FFEBEE',
+                                    color: '#C62828',
+                                    border: '1px solid #FFCDD2',
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                {cancelling ? 'Membatalkan...' : 'BATALKAN BOOKING'}
+                            </button>
+                        )}
+                    </>
                 ) : (
                     <div style={{ padding: 20, textAlign: 'center', color: '#aaa' }} className="animate-pulse">Memuat...</div>
                 )}
@@ -106,6 +152,7 @@ function SeatsPageContent() {
     const [locking, setLocking] = useState(false);
     const [error, setError] = useState('');
     const [lockedBySelf, setLockedBySelf] = useState<string | null>(null);
+    const isNavigatingToPurchase = React.useRef(false);
 
     const [popupSeat, setPopupSeat] = useState<Seat | null>(null);
     const [popupBooking, setPopupBooking] = useState<Booking | null>(null);
@@ -143,7 +190,12 @@ function SeatsPageContent() {
     }, [busId, routeId, fetchSeats]);
 
     useEffect(() => {
-        return () => { if (lockedBySelf) releaseSeat(lockedBySelf).catch(() => { }); };
+        return () => {
+            // Hanya lepas seat jika TIDAK sedang lanjut ke pembayaran
+            if (lockedBySelf && !isNavigatingToPurchase.current) {
+                releaseSeat(lockedBySelf).catch(() => { });
+            }
+        };
     }, [lockedBySelf]);
 
     async function showBookedInfo(seat: Seat) {
@@ -158,7 +210,6 @@ function SeatsPageContent() {
 
         if (seat.status === 'booked') {
             const { data } = await supabase.from('bookings').select('agent_phone, agent_name').eq('seat_id', seat.id).eq('status', 'confirmed').single();
-            // Cek nomor HP (utama) atau cek nama (fallback untuk session lama)
             if (data && data.agent_phone !== agent.phone && data.agent_name !== agent.name) {
                 setError('Hanya agen yang memesan yang dapat melihat detail kursi ini');
                 setTimeout(() => setError(''), 3000);
@@ -168,7 +219,6 @@ function SeatsPageContent() {
             return;
         }
 
-        if (!agent) return;
         if (seat.status === 'locked' && seat.locked_by_agent !== agent.name) {
             setError('Kursi sedang dipilih oleh agen lain');
             setTimeout(() => setError(''), 2500);
@@ -194,8 +244,30 @@ function SeatsPageContent() {
         setSelectedSeat(seat);
     }
 
+    async function handleSeatDoubleClick(seat: Seat) {
+        if (!agent) return;
+
+        if (seat.status === 'locked' && seat.locked_by_agent === agent.name) {
+            // Batalkan lock (proses) jika double-click
+            await releaseSeat(seat.id);
+            setLockedBySelf(null);
+            setSelectedSeat(null);
+            return;
+        }
+
+        if (seat.status === 'booked') {
+            const { data } = await supabase.from('bookings').select('*').eq('seat_id', seat.id).eq('status', 'confirmed').single();
+            if (data && (data.agent_phone === agent.phone || data.agent_name === agent.name)) {
+                if (confirm(`Batalkan booking kursi ${seat.nomor_kursi} ini?`)) {
+                    await cancelBooking(data.id);
+                }
+            }
+        }
+    }
+
     function handleContinue() {
         if (!selectedSeat) return;
+        isNavigatingToPurchase.current = true;
         router.push(
             `/armada/${busId}/booking?seatId=${selectedSeat.id}&routeId=${routeId}&tujuan=${encodeURIComponent(tujuan)}&harga=${harga}&nomor=${selectedSeat.nomor_kursi}&date=${date}`
         );
@@ -205,13 +277,13 @@ function SeatsPageContent() {
 
     function getSeatStyle(seat: Seat) {
         const isSelected = selectedSeat?.id === seat.id;
-        if (seat.status === 'booked') return { fill: '#C0392B', stroke: '#C0392B' };
+        if (seat.status === 'booked') return { fill: '#e74c3c', stroke: '#c0392b' }; // Merah (Terisi)
         if (seat.status === 'locked') {
-            if (seat.locked_by_agent === agent?.name) return { fill: '#8B1A1A', stroke: '#8B1A1A' };
-            return { fill: '#E67E22', stroke: '#E67E22' };
+            if (seat.locked_by_agent === agent?.name) return { fill: '#8B1A1A', stroke: '#8B1A1A' }; // Maroon (Dipilih diri sendiri)
+            return { fill: '#F39C12', stroke: '#D35400' }; // Orange (Diproses orang lain)
         }
         if (isSelected) return { fill: '#8B1A1A', stroke: '#8B1A1A' };
-        return { fill: '#EFEFEF', stroke: '#CCCCCC' };
+        return { fill: '#EFEFEF', stroke: '#CCCCCC' }; // Kembali ke Abu-abu (Tersedia)
     }
 
     function getNumberColor(seat: Seat) {
@@ -221,14 +293,16 @@ function SeatsPageContent() {
 
     function renderSingleSeat(seat: Seat) {
         const sStyle = getSeatStyle(seat);
-        const numColor = getSeatStyle(seat).fill !== '#EFEFEF' ? 'white' : '#333';
+        const isDefault = sStyle.fill === '#27AE60' || sStyle.fill === '#C0392B' || sStyle.fill === '#e74c3c' || sStyle.fill === '#8B1A1A' || sStyle.fill === '#F39C12';
+        const numColor = isDefault ? 'white' : '#333';
 
         return (
             <div
                 key={seat.id}
                 className="seat-item"
                 onClick={() => !locking && handleSeatClick(seat)}
-                style={{ opacity: locking && selectedSeat?.id !== seat.id ? 0.7 : 1, cursor: 'pointer' }}
+                onDoubleClick={() => !locking && handleSeatDoubleClick(seat)}
+                style={{ opacity: locking && selectedSeat?.id !== seat.id ? 0.7 : 1, cursor: 'pointer', userSelect: 'none' }}
             >
                 <svg width="50" height="50" viewBox="0 0 56 56">
                     <rect x="8" y="6" width="40" height="26" rx="6" fill={sStyle.fill} stroke={sStyle.stroke} strokeWidth="1.5" />
@@ -296,8 +370,13 @@ function SeatsPageContent() {
             </div>
 
             {/* Hint */}
-            <div style={{ margin: '0 16px 8px', background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#795548' }}>
-                💡 Klik kursi <strong>merah</strong> untuk lihat info agen & tujuan
+            <div style={{ margin: '0 16px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#795548' }}>
+                    💡 Klik kursi <strong>merah</strong> untuk lihat info tiket
+                </div>
+                <div style={{ background: '#E3F2FD', border: '1px solid #90CAF9', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#1565C0' }}>
+                    ⚡ <strong>Klik 2x (Double-click)</strong> untuk batal cepat (lock/booking)
+                </div>
             </div>
 
             {/* Error */}
@@ -378,8 +457,8 @@ function SeatsPageContent() {
                 {[
                     { color: '#EFEFEF', label: 'Tersedia' },
                     { color: '#8B1A1A', label: 'Dipilih' },
-                    { color: '#C0392B', label: 'Terisi' },
-                    { color: '#E67E22', label: 'Diproses' },
+                    { color: '#e74c3c', label: 'Terisi' },
+                    { color: '#F39C12', label: 'Diproses' },
                 ].map(l => (
                     <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <div style={{ width: 14, height: 14, background: l.color, borderRadius: 3, border: '1px solid #ccc' }} />

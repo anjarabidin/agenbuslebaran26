@@ -38,15 +38,36 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Gunakan UPSERT: Jika HP sudah ada, update Nama & Lokasi. Jika belum, tambah baru.
-      await supabase.from('agents').upsert({
-        phone: cleaned,
-        name: name.trim(),
-        location: location.trim(),
-        last_login: new Date().toISOString()
-      }, { onConflict: 'phone' });
+      // 1. Cek apakah nomor HP sudah terdaftar
+      const { data: existingAgent, error: fetchErr } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('phone', cleaned)
+        .maybeSingle();
 
-      setAgentSession(name.trim(), location.trim(), cleaned);
+      let finalName = name.trim();
+      let finalLocation = location.trim();
+
+      if (existingAgent) {
+        // Jika sudah ada, gunakan data LAMA dari database (agar nama & lokasi tidak berubah-ubah)
+        finalName = existingAgent.name;
+        finalLocation = existingAgent.location;
+        
+        // Update waktu login terakhir saja
+        await supabase.from('agents').update({
+          last_login: new Date().toISOString()
+        }).eq('phone', cleaned);
+      } else {
+        // Jika belum ada, baru simpan data BARU
+        await supabase.from('agents').insert({
+          phone: cleaned,
+          name: finalName,
+          location: finalLocation,
+          last_login: new Date().toISOString()
+        });
+      }
+
+      setAgentSession(finalName, finalLocation, cleaned);
       router.push('/armada');
     } catch (err) {
       console.error('Login error:', err);

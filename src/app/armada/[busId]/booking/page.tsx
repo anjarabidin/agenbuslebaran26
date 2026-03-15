@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { X, ChevronDown, QrCode, Copy, ChevronUp } from 'lucide-react';
 import { getAgentSession, formatCurrency } from '@/lib/utils';
-import { createBooking } from '@/lib/db';
+import { createBooking, releaseSeat } from '@/lib/db';
 import type { Bus, Route } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -47,6 +47,16 @@ function BookingPageContent() {
     const [error, setError] = useState('');
     const [showCost, setShowCost] = useState(false);
     const [showPassengerInput, setShowPassengerInput] = useState(false);
+    const isSubmitted = React.useRef(false);
+
+    useEffect(() => {
+        return () => {
+            // Lepas seat jika user keluar dari halaman ini tanpa membeli
+            if (seatId && !isSubmitted.current) {
+                releaseSeat(seatId).catch(() => { });
+            }
+        };
+    }, [seatId]);
 
     useEffect(() => {
         const session = getAgentSession();
@@ -86,6 +96,8 @@ function BookingPageContent() {
                 setError(result.message);
                 return;
             }
+
+            isSubmitted.current = true;
 
             router.replace(
                 `/armada/${busId}/booking/success` +
