@@ -63,6 +63,8 @@ function BookingPageContent() {
         if (!session) { router.replace('/'); return; }
         setAgent(session);
 
+        if (!busId || !routeId) return; // Mencegah query dengan ID kosong
+
         Promise.all([
             supabase.from('buses').select('*').eq('id', busId).single(),
             supabase.from('routes').select('*, via_stops').eq('id', routeId).single(),
