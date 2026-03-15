@@ -26,21 +26,31 @@ export default function AdminManifestPage() {
     }, [router]);
 
     const fetchManifest = useCallback(async () => {
-        if (!selectedBus) return;
+        if (!selectedBus) {
+            setBookings([]);
+            return;
+        }
         setLoading(true);
         const { data } = await supabase
             .from('bookings')
             .select('*, buses(kode, nama, arah, jam_berangkat)')
             .eq('bus_id', selectedBus)
             .eq('status', 'confirmed')
-            .gte('created_at', `${selectedDate}T00:00:00`)
-            .lte('created_at', `${selectedDate}T23:59:59`)
             .order('nomor_kursi');
         setBookings((data as (Booking & { buses: Bus })[]) || []);
         setLoading(false);
-    }, [selectedBus, selectedDate]);
+    }, [selectedBus]);
 
-    useEffect(() => { fetchManifest(); }, [fetchManifest]);
+    useEffect(() => { 
+        // Reset bus selection if the new date doesn't match the current selected bus date
+        if (selectedBus) {
+            const currentBus = buses.find(b => b.id === selectedBus);
+            if (currentBus && currentBus.tanggal !== selectedDate) {
+                setSelectedBus('');
+            }
+        }
+        fetchManifest(); 
+    }, [fetchManifest, selectedDate, buses, selectedBus]);
 
     const bus = buses.find(b => b.id === selectedBus);
     const displayDate = format(new Date(selectedDate + 'T00:00:00'), "d MMMM yyyy", { locale: idLocale });
@@ -73,7 +83,9 @@ export default function AdminManifestPage() {
             <div style={{ background: 'white', padding: '12px 16px', display: 'flex', gap: 8, borderBottom: '1px solid var(--border)' }}>
                 <select className="input-field" value={selectedBus} onChange={e => setSelectedBus(e.target.value)} style={{ flex: 2, padding: '10px 12px', fontSize: 13 }}>
                     <option value="">-- Pilih Bus --</option>
-                    {buses.map(b => <option key={b.id} value={b.id}>{b.kode} - {b.arah}</option>)}
+                    {buses
+                        .filter(b => b.tanggal === selectedDate)
+                        .map(b => <option key={b.id} value={b.id}>{b.kode} - {b.arah} ({b.jam_berangkat})</option>)}
                 </select>
                 <input type="date" className="input-field" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ flex: 1, padding: '10px 12px', fontSize: 13 }} />
             </div>
