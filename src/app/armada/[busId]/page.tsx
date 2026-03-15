@@ -113,7 +113,7 @@ function BusDetailContent() {
     const busId = params.busId as string;
 
     const [date, setDate] = useState<string>(''); // Init empty for hydration
-    const [agent, setAgent] = useState<{ name: string; location: string } | null>(null);
+    const [agent, setAgent] = useState<{ name: string; location: string; phone: string } | null>(null);
     const [bus, setBus] = useState<Bus | null>(null);
     const [routes, setRoutes] = useState<(Route & { route_prices: RoutePrice[] })[]>([]);
     const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
@@ -320,27 +320,34 @@ function BusDetailContent() {
                                 <span>Total {manifests.length} penumpang</span>
                                 <span style={{ color: '#888' }}>Ketuk untuk detail penunpang</span>
                             </div>
-                            {manifests.map(b => (
-                                <div
-                                    key={b.id}
-                                    style={{ background: 'white', padding: '13px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
-                                    onClick={() => setSelectedBooking(b)}
-                                >
-                                    {/* Nomor kursi */}
-                                    <div style={{ width: 36, height: 36, background: '#8B1A1A', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                        <span style={{ color: 'white', fontSize: 13, fontWeight: 800 }}>{b.nomor_kursi}</span>
+                            {manifests.map(b => {
+                                const isOwnBooking = agent && b.agent_phone === agent.phone;
+                                return (
+                                    <div
+                                        key={b.id}
+                                        style={{ background: 'white', padding: '13px 16px', borderBottom: '1px solid var(--border)', cursor: isOwnBooking ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 12, opacity: isOwnBooking ? 1 : 0.8 }}
+                                        onClick={() => {
+                                            if (isOwnBooking) setSelectedBooking(b);
+                                        }}
+                                    >
+                                        {/* Nomor kursi */}
+                                        <div style={{ width: 36, height: 36, background: '#8B1A1A', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <span style={{ color: 'white', fontSize: 13, fontWeight: 800 }}>{b.nomor_kursi}</span>
+                                        </div>
+                                        {/* Info */}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <p style={{ fontSize: 14, fontWeight: 700, color: '#1A1A1A' }}>
+                                                {isOwnBooking ? b.passenger_name : 'Kursi Terisi'}
+                                            </p>
+                                            <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                                                {isOwnBooking ? `${b.tujuan} • Agen Anda` : 'Dipesan oleh Agen Lain'}
+                                            </p>
+                                        </div>
+                                        {/* Panah */}
+                                        {isOwnBooking && <ChevronRight size={16} color="#ccc" />}
                                     </div>
-                                    {/* Info */}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <p style={{ fontSize: 14, fontWeight: 700, color: '#1A1A1A' }}>{b.passenger_name}</p>
-                                        <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
-                                            {b.tujuan} • {b.agent_name}
-                                        </p>
-                                    </div>
-                                    {/* Panah */}
-                                    <ChevronRight size={16} color="#ccc" />
-                                </div>
-                            ))}
+                                );
+                            })}
                         </>
                     )}
                 </div>
