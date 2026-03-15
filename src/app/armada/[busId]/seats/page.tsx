@@ -154,7 +154,15 @@ function SeatsPageContent() {
     }
 
     async function handleSeatClick(seat: Seat) {
+        if (!agent) return;
+
         if (seat.status === 'booked') {
+            const { data } = await supabase.from('bookings').select('agent_phone').eq('seat_id', seat.id).eq('status', 'confirmed').single();
+            if (data && data.agent_phone !== agent.phone) {
+                setError('Hanya agen yang memesan yang dapat melihat detail kursi ini');
+                setTimeout(() => setError(''), 3000);
+                return;
+            }
             showBookedInfo(seat);
             return;
         }
