@@ -2,23 +2,61 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { ChevronRight, ChevronDown, X, CalendarDays, MessageCircle, ArrowRightLeft, ArrowLeft } from 'lucide-react';
+import { ChevronRight, ChevronDown, X, CalendarDays, MessageCircle, ArrowRightLeft, ArrowLeft, Share2, Printer, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { getAgentSession, formatCurrency } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import type { Bus, Route, RoutePrice, Booking } from '@/types';
+import { toBlob } from 'html-to-image';
+import { QRCodeSVG } from 'qrcode.react';
 
 type ActiveTab = 'pembelian' | 'manifest' | 'paket';
 
 // ===== Komponen Popup Detail Penumpang =====
 function PassengerPopup({
     booking,
+    bus,
     onClose,
 }: {
     booking: Booking;
+    bus: Bus | null;
     onClose: () => void;
 }) {
+    const [sharing, setSharing] = useState(false);
+
+    async function handleShareImage() {
+        const ticket = document.getElementById('ticket-capture');
+        if (!ticket) return;
+
+        setSharing(true);
+        try {
+            const blob = await toBlob(ticket, {
+                backgroundColor: '#ffffff',
+                pixelRatio: 2,
+            });
+
+            if (blob && navigator.share) {
+                const file = new File([blob], `tiket_${booking.nomor_kursi}_${booking.passenger_name}.png`, { type: 'image/png' });
+                await navigator.share({
+                    files: [file],
+                    title: 'Tiket Bus',
+                    text: `Tiket Bus untuk ${booking.passenger_name} (Kursi ${booking.nomor_kursi})`
+                });
+            } else if (blob) {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tiket_${booking.nomor_kursi}.png`;
+                a.click();
+            }
+        } catch (err) {
+            console.error('Error sharing ticket:', err);
+            alert('Gagal membagikan tiket sebagai gambar.');
+        } finally {
+            setSharing(false);
+        }
+    }
     function handleWA() {
         const cleaned = booking.passenger_phone.replace(/\D/g, '').replace(/^0/, '62');
         const msg =
@@ -81,14 +119,63 @@ function PassengerPopup({
 
                 {/* Actions */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <button
+                        onClick={handleShareImage}
+                        disabled={sharing}
+                        style={{ background: '#4527A0', color: 'white', border: 'none', borderRadius: 12, padding: '14px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    >
+                        <Share2 size={18} /> {sharing ? 'Menyiapkan...' : 'Bagikan Tiket Gambar'}
+                    </button>
                     {/* Kirim nota via WA */}
                     <button
                         onClick={handleWA}
                         style={{ background: '#25D366', color: 'white', border: 'none', borderRadius: 12, padding: '14px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                     >
-                        <MessageCircle size={18} /> Cetak Nota via WhatsApp
+                        <MessageCircle size={18} /> Kirim via WhatsApp (Teks)
                     </button>
                     <button onClick={onClose} className="btn-secondary">Tutup</button>
+                </div>
+
+                {/* Hidden Ticket for Capture */}
+                <div id="ticket-capture" style={{ position: 'fixed', left: -9999, top: -9999, background: 'white', padding: '24px', width: 380, borderRadius: 18, border: '1px solid #eee' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                        <h3 style={{ fontSize: 18, fontWeight: 800, color: '#8B1A1A', margin: 0 }}>E-TICKET BUS</h3>
+                        <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>ID: {booking.id}</p>
+                    </div>
+                    {bus && (
+                        <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed #e0e0e0' }}>
+                            <p style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>{bus.arah} / {bus.kode}</p>
+                            <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>{bus.nama.replace(/^[^-]+/, booking.agent_location)}</p>
+                            <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{booking.agent_location} → {booking.tujuan}</p>
+                        </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                        <div>
+                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>No Kursi</p>
+                            <p style={{ fontSize: 24, fontWeight: 800, color: '#8B1A1A' }}>{booking.nomor_kursi}</p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Harga</p>
+                            <p style={{ fontSize: 16, fontWeight: 700 }}>{formatCurrency(booking.harga)}</p>
+                        </div>
+                    </div>
+                    <div style={{ marginBottom: 20 }}>
+                        <div style={{ marginBottom: 10 }}>
+                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Penumpang</p>
+                            <p style={{ fontSize: 14, fontWeight: 600 }}>{booking.passenger_name}</p>
+                        </div>
+                        <div>
+                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>No HP</p>
+                            <p style={{ fontSize: 14, fontWeight: 600 }}>{booking.passenger_phone}</p>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', borderTop: '1px dashed #e0e0e0', borderBottom: '1px dashed #e0e0e0', marginBottom: 20 }}>
+                        <QRCodeSVG value={booking.id} size={180} level="H" includeMargin />
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <p style={{ fontSize: 11, fontWeight: 700, margin: 0 }}>AGEN: {booking.agent_name}</p>
+                        <p style={{ fontSize: 10, color: '#888' }}>{booking.agent_location}</p>
+                    </div>
                 </div>
             </div>
             <style>{`@keyframes slideUp { from { transform: translateX(-50%) translateY(100%); } to { transform: translateX(-50%) translateY(0); } }`}</style>
@@ -369,6 +456,7 @@ function BusDetailContent() {
             {selectedBooking && (
                 <PassengerPopup
                     booking={selectedBooking}
+                    bus={bus}
                     onClose={() => setSelectedBooking(null)}
                 />
             )}
