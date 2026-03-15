@@ -152,7 +152,7 @@ function SuccessPageContent() {
                 <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed #e0e0e0' }}>
                     <p style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>{busArah} / {busKode}</p>
                     <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>{busNama.replace(/^[^-]+/, agentLocation)}</p>
-                    <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{agentLocation} → {tujuan} • {jamBerangkat}</p>
+                    <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{agentLocation} → {tujuan}</p>
                 </div>
 
                 {/* Ticket details */}
