@@ -136,45 +136,47 @@ function PassengerPopup({
                     <button onClick={onClose} className="btn-secondary">Tutup</button>
                 </div>
 
-                {/* Hidden Ticket for Capture */}
-                <div id="ticket-capture" style={{ position: 'fixed', left: -9999, top: -9999, background: 'white', padding: '24px', width: 380, borderRadius: 18, border: '1px solid #eee' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                        <h3 style={{ fontSize: 18, fontWeight: 800, color: '#8B1A1A', margin: 0 }}>E-TICKET BUS</h3>
-                        <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>ID: {booking.id}</p>
-                    </div>
-                    {bus && (
-                        <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed #e0e0e0' }}>
-                            <p style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>{bus.arah} / {bus.kode}</p>
-                            <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>{bus.nama.replace(/^[^-]+/, booking.agent_location)}</p>
-                            <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{booking.agent_location} → {booking.tujuan}</p>
+                {/* Hidden Ticket for Capture - Using height:0 and overflow:hidden for reliable rendering */}
+                <div style={{ height: 0, overflow: 'hidden', position: 'absolute' }}>
+                    <div id="ticket-capture" style={{ background: 'white', padding: '24px', width: 380, borderRadius: 18, border: '1px solid #eee', color: '#333', lineHeight: '1.4' }}>
+                        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                            <h3 style={{ fontSize: 18, fontWeight: 800, color: '#8B1A1A', margin: 0 }}>E-TICKET BUS</h3>
+                            <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>ID: {booking.id}</p>
                         </div>
-                    )}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-                        <div>
-                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>No Kursi</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#8B1A1A' }}>{booking.nomor_kursi}</p>
+                        {bus && (
+                            <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed #e0e0e0' }}>
+                                <p style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>{bus.arah} / {bus.kode}</p>
+                                <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>{bus.nama.replace(/^[^-]+/, booking.agent_location)}</p>
+                                <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{booking.agent_location} → {booking.tujuan}</p>
+                            </div>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                            <div>
+                                <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>No Kursi</p>
+                                <p style={{ fontSize: 24, fontWeight: 800, color: '#8B1A1A' }}>{booking.nomor_kursi}</p>
+                            </div>
+                            <div>
+                                <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Harga</p>
+                                <p style={{ fontSize: 16, fontWeight: 700 }}>{formatCurrency(booking.harga)}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Harga</p>
-                            <p style={{ fontSize: 16, fontWeight: 700 }}>{formatCurrency(booking.harga)}</p>
+                        <div style={{ marginBottom: 20 }}>
+                            <div style={{ marginBottom: 10 }}>
+                                <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Penumpang</p>
+                                <p style={{ fontSize: 14, fontWeight: 600 }}>{booking.passenger_name}</p>
+                            </div>
+                            <div>
+                                <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>No HP</p>
+                                <p style={{ fontSize: 14, fontWeight: 600 }}>{booking.passenger_phone}</p>
+                            </div>
                         </div>
-                    </div>
-                    <div style={{ marginBottom: 20 }}>
-                        <div style={{ marginBottom: 10 }}>
-                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Penumpang</p>
-                            <p style={{ fontSize: 14, fontWeight: 600 }}>{booking.passenger_name}</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', borderTop: '1px dashed #e0e0e0', borderBottom: '1px dashed #e0e0e0', marginBottom: 20 }}>
+                            <QRCodeSVG value={booking.id} size={180} level="H" includeMargin />
                         </div>
-                        <div>
-                            <p style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>No HP</p>
-                            <p style={{ fontSize: 14, fontWeight: 600 }}>{booking.passenger_phone}</p>
+                        <div style={{ textAlign: 'center' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, margin: 0 }}>AGEN: {booking.agent_name}</p>
+                            <p style={{ fontSize: 10, color: '#888' }}>{booking.agent_location}</p>
                         </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', borderTop: '1px dashed #e0e0e0', borderBottom: '1px dashed #e0e0e0', marginBottom: 20 }}>
-                        <QRCodeSVG value={booking.id} size={180} level="H" includeMargin />
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                        <p style={{ fontSize: 11, fontWeight: 700, margin: 0 }}>AGEN: {booking.agent_name}</p>
-                        <p style={{ fontSize: 10, color: '#888' }}>{booking.agent_location}</p>
                     </div>
                 </div>
             </div>
