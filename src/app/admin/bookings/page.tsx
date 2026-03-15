@@ -52,22 +52,18 @@ export default function AdminBookingsPage() {
 
     const fetchBookings = useCallback(async () => {
         setLoading(true);
+        // Gunakan !inner agar filter tanggal bis memfilter baris bookingnya juga
         let query = supabase
             .from('bookings')
-            .select('*, buses!inner(kode, nama, arah, jam_berangkat, tanggal), routes(kota_asal, kota_tujuan, via_stops)');
+            .select('*, buses!inner(kode, nama, arah, jam_berangkat, tanggal), routes(kota_asal, kota_tujuan, via_stops)')
+            .order('nomor_kursi', { ascending: true });
 
         if (filterDate) {
             query = query.eq('buses.tanggal', filterDate);
         }
-        
         if (filterBus) query = query.eq('bus_id', filterBus);
         if (filterAgent.trim()) query = query.ilike('agent_name', `%${filterAgent}%`);
         if (filterStatus) query = query.eq('status', filterStatus);
-
-        // Sorting: Tanggal Bis (Keberangkatan) dulu, baru Nomor Kursi
-        query = query
-            .order('tanggal', { foreignTable: 'buses', ascending: true })
-            .order('nomor_kursi', { ascending: true });
 
         const { data, error } = await query;
         if (!error) setBookings((data as BookingWithDetails[]) || []);
@@ -123,8 +119,7 @@ export default function AdminBookingsPage() {
         if (bookings.length === 0) return alert('Tidak ada data untuk didownload');
 
         const dataToExport = bookings.map(b => ({
-            'Tanggal Keberangkatan': b.buses?.tanggal || '-',
-            'Jan Berangkat': b.buses?.jam_berangkat || '-',
+            'Tanggal': format(new Date(b.created_at), 'yyyy-MM-dd HH:mm'),
             'Bus': b.buses?.kode || '-',
             'Arah': b.buses?.arah || '-',
             'Kursi': b.nomor_kursi,
@@ -134,8 +129,7 @@ export default function AdminBookingsPage() {
             'Harga': b.harga,
             'Agen': b.agent_name,
             'Lokasi Agen': b.agent_location,
-            'Status': b.status,
-            'Tanggal Transaksi': format(new Date(b.created_at), 'yyyy-MM-dd HH:mm')
+            'Status': b.status
         }));
 
         const csv = Papa.unparse(dataToExport);
@@ -229,11 +223,10 @@ export default function AdminBookingsPage() {
                             </div>
 
                             <div style={{ background: '#f9f9f9', borderRadius: 8, padding: '8px 10px', marginBottom: 8, fontSize: 12, color: '#555' }}>
-                                <p>🗓️ <strong>Tgl Keberangkatan: {b.buses?.tanggal ? format(new Date(b.buses.tanggal + 'T00:00:00'), 'd MMM yyyy', { locale: idLocale }) : '-'}</strong></p>
-                                <p style={{ marginTop: 2 }}>🚌 {b.buses?.kode} • {b.buses?.arah} | 🎯 {b.tujuan}</p>
+                                <p>🚌 {b.buses?.kode} • {b.buses?.arah} | 🎯 {b.tujuan}</p>
                                 <p style={{ marginTop: 2 }}>🏪 Agen: <strong>{b.agent_name}</strong> ({b.agent_location})</p>
                                 {b.catatan && <p style={{ marginTop: 2 }}>📝 {b.catatan}</p>}
-                                <p style={{ marginTop: 4, color: '#aaa', fontSize: 10 }}>🛒 Transaksi: {format(new Date(b.created_at), "d MMM yyyy HH:mm", { locale: idLocale })}</p>
+                                <p style={{ marginTop: 2, color: '#aaa' }}>🕐 {format(new Date(b.created_at), "d MMM yyyy HH:mm", { locale: idLocale })}</p>
                             </div>
 
                             <div style={{ display: 'flex', gap: 8 }}>
