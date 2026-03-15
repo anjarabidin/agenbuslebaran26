@@ -188,7 +188,7 @@ function SeatsPageContent() {
     function handleContinue() {
         if (!selectedSeat) return;
         router.push(
-            `/armada/${busId}/seats/booking?seatId=${selectedSeat.id}&routeId=${routeId}&tujuan=${encodeURIComponent(tujuan)}&harga=${harga}&nomor=${selectedSeat.nomor_kursi}&date=${date}`
+            `/armada/${busId}/booking?seatId=${selectedSeat.id}&routeId=${routeId}&tujuan=${encodeURIComponent(tujuan)}&harga=${harga}&nomor=${selectedSeat.nomor_kursi}&date=${date}`
         );
     }
 
