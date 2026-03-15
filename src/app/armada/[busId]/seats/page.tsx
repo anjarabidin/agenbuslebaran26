@@ -369,15 +369,7 @@ function SeatsPageContent() {
                 </span>
             </div>
 
-            {/* Hint */}
-            <div style={{ margin: '0 16px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#795548' }}>
-                    💡 Klik kursi <strong>merah</strong> untuk lihat info tiket
-                </div>
-                <div style={{ background: '#E3F2FD', border: '1px solid #90CAF9', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#1565C0' }}>
-                    ⚡ <strong>Klik 2x (Double-click)</strong> untuk batal cepat (lock/booking)
-                </div>
-            </div>
+
 
             {/* Error */}
             {error && (
