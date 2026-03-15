@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bus, Phone } from 'lucide-react';
+import { Bus, Phone, User, MapPin } from 'lucide-react';
 import { setAgentSession, getAgentSession } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
+  
+  const [step, setStep] = useState<1 | 2>(1);
+  const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
-  const [phone, setPhone] = useState('');
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -19,36 +22,65 @@ export default function LoginPage() {
     if (session) router.replace('/armada');
   }, [router]);
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleCheckPhone(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !location.trim() || !phone.trim()) {
-      setError('Semua kolom harus diisi');
-      return;
-    }
-    // Validasi sederhana: no WA minimal 10 digit
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length < 10) {
       setError('No WhatsApp tidak valid (minimal 10 digit)');
       return;
     }
+    
     setLoading(true);
+    setError('');
+    
     try {
-      // Sync ke tabel agents
-      await supabase.from('agents').upsert({
+      const { data, error: fetchErr } = await supabase
+        .from('agents')
+        .select('name, location')
+        .eq('phone', cleaned)
+        .maybeSingle();
+
+      if (data) {
+        // Phone already registered, login immediately
+        await supabase.from('agents').update({ last_login: new Date().toISOString() }).eq('phone', cleaned);
+        setAgentSession(data.name, data.location, cleaned);
+        router.push('/armada');
+      } else {
+        // Phone not found, proceed to step 2 for registration
+        setStep(2);
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('Check phone error:', err);
+      setError('Terjadi kesalahan jaringan.');
+      setLoading(false);
+    }
+  }
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !location.trim()) {
+      setError('Nama dan Lokasi harus diisi');
+      return;
+    }
+
+    const cleaned = phone.replace(/\D/g, '');
+    setLoading(true);
+    setError('');
+
+    try {
+      await supabase.from('agents').insert({
         phone: cleaned,
         name: name.trim(),
         location: location.trim(),
         last_login: new Date().toISOString()
-      }, { onConflict: 'phone' });
+      });
 
       setAgentSession(name.trim(), location.trim(), cleaned);
       router.push('/armada');
     } catch (err) {
-      console.error('Login sync error:', err);
-      // Tetap lanjutkan login meskipun sync gagal
-      setAgentSession(name.trim(), location.trim(), cleaned);
-      router.push('/armada');
-    } finally {
+      console.error('Registration error:', err);
+      setError('Gagal menyimpan pendaftaran.');
       setLoading(false);
     }
   }
@@ -74,72 +106,91 @@ export default function LoginPage() {
 
       {/* Card */}
       <div style={{ background: 'white', borderRadius: 22, padding: '28px 24px', width: '100%', maxWidth: 380, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 6, color: '#1A1A1A' }}>Masuk sebagai Agen</h2>
-        <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Gunakan no WhatsApp Anda sebagai identitas</p>
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 6, color: '#1A1A1A' }}>
+          {step === 1 ? 'Masuk sebagai Agen' : 'Lengkapi Profil Agen'}
+        </h2>
+        <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>
+          {step === 1 ? 'Gunakan no WhatsApp Anda sebagai identitas' : 'Nomor HP belum terdaftar, mohon lengkapi info ini'}
+        </p>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-              Nama Agen / Toko
-            </label>
-            <input
-              className="input-field"
-              type="text"
-              placeholder="Contoh: Agen Gajah"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              autoFocus
-            />
+        {step === 1 ? (
+          <form onSubmit={handleCheckPhone} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                <Phone size={11} style={{ display: 'inline', marginRight: 4 }} />
+                No WhatsApp Terdaftar
+              </label>
+              <input
+                className="input-field"
+                type="tel"
+                placeholder="Contoh: 08123456789"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            {error && <p style={{ color: '#C62828', fontSize: 13 }}>⚠️ {error}</p>}
+
+            <button className="btn-primary" type="submit" disabled={loading || !phone} style={{ marginTop: 4 }}>
+              {loading ? 'Memeriksa...' : 'Lanjutkan →'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                <User size={11} style={{ display: 'inline', marginRight: 4 }} />
+                Nama Agen / Toko
+              </label>
+              <input
+                className="input-field"
+                type="text"
+                placeholder="Contoh: Agen Gajah"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                <MapPin size={11} style={{ display: 'inline', marginRight: 4 }} />
+                Lokasi Toko
+              </label>
+              <input
+                className="input-field"
+                type="text"
+                placeholder="Contoh: Demak, Jawa Tengah"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+              />
+            </div>
+
+            {error && <p style={{ color: '#C62828', fontSize: 13 }}>⚠️ {error}</p>}
+
+            <button className="btn-primary" type="submit" disabled={loading || !name || !location} style={{ marginTop: 4 }}>
+              {loading ? 'Mendaftar...' : 'Daftar & Masuk →'}
+            </button>
+            <button type="button" onClick={() => { setStep(1); setError(''); }} style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
+              ← Kembali
+            </button>
+          </form>
+        )}
+
+        {step === 1 && (
+          <div style={{ marginTop: 24, textAlign: 'center' }}>
+            <button
+              onClick={() => router.push('/admin')}
+              style={{ background: 'none', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer' }}
+            >
+              🔒 Login sebagai Admin
+            </button>
           </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-              Lokasi Toko
-            </label>
-            <input
-              className="input-field"
-              type="text"
-              placeholder="Contoh: Demak, Jawa Tengah"
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-              <Phone size={11} style={{ display: 'inline', marginRight: 4 }} />
-              No WhatsApp (sebagai identitas)
-            </label>
-            <input
-              className="input-field"
-              type="tel"
-              placeholder="Contoh: 08123456789"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-            />
-            <p style={{ fontSize: 11, color: '#aaa', marginTop: 5 }}>
-              📌 No WA ini digunakan sebagai kode keamanan Anda
-            </p>
-          </div>
-
-          {error && <p style={{ color: '#C62828', fontSize: 13 }}>⚠️ {error}</p>}
-
-          <button className="btn-primary" type="submit" disabled={loading || !name || !location || !phone} style={{ marginTop: 4 }}>
-            {loading ? 'Memproses...' : 'Masuk →'}
-          </button>
-        </form>
-
-        <div style={{ marginTop: 20, textAlign: 'center' }}>
-          <button
-            onClick={() => router.push('/admin')}
-            style={{ background: 'none', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer' }}
-          >
-            🔒 Login sebagai Admin
-          </button>
-        </div>
+        )}
       </div>
 
-      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 24 }}>v1.0 — PWA Operasional Bus</p>
+      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 24 }}>v1.1 — PWA Operasional Bus</p>
     </div>
   );
 }
