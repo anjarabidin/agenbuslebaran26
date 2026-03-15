@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { X, ChevronDown, QrCode, Copy, ChevronUp } from 'lucide-react';
 import { getAgentSession, formatCurrency } from '@/lib/utils';
