@@ -125,7 +125,9 @@ function BookingPageContent() {
             {bus && (
                 <div style={{ background: 'white', padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
                     <p style={{ fontSize: 12, color: '#888', marginBottom: 2 }}>{bus.arah} / {bus.kode}</p>
-                    <p style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A', marginBottom: route?.via_stops?.length ? 4 : 0 }}>{bus.nama}</p>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A', marginBottom: route?.via_stops?.length ? 4 : 0 }}>
+                        {agent ? bus.nama.replace(/^[^-]+/, agent.location) : bus.nama}
+                    </p>
                     {route?.via_stops && route.via_stops.length > 0 && (
                         <p style={{ fontSize: 11, color: '#999', lineHeight: 1.5 }}>
                             {route.via_stops.join(' - ')}

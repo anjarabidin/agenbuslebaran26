@@ -27,7 +27,7 @@ function PassengerPopup({
             `💺 Kursi No. ${booking.nomor_kursi}\n` +
             `👤 ${booking.passenger_name}\n` +
             `📞 ${booking.passenger_phone}\n` +
-            `📌 Tujuan: ${booking.tujuan}\n` +
+            `📍 Rute: ${booking.agent_location} - ${booking.tujuan}\n` +
             `💰 ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(booking.harga)}\n` +
             `━━━━━━━━━━━━━━\n` +
             `🏪 Agen: ${booking.agent_name}\n` +
@@ -254,7 +254,9 @@ function BusDetailContent() {
             {bus && (
                 <div style={{ background: 'white', padding: '14px 16px', marginBottom: 2 }}>
                     <p style={{ fontSize: 12, color: '#888', fontWeight: 600, marginBottom: 3 }}>{bus.arah} / {bus.kode}</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', marginBottom: 4 }}>{bus.nama}</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', marginBottom: 4 }}>
+                        {agent ? bus.nama.replace(/^[^-]+/, agent.location) : bus.nama}
+                    </p>
                     {routes[0]?.via_stops && routes[0].via_stops.length > 0 && (
                         <p style={{ fontSize: 12, color: '#999' }}>{routes[0].via_stops.join(' - ')}</p>
                     )}
@@ -295,7 +297,9 @@ function BusDetailContent() {
                                             <div key={price.id}
                                                 style={{ background: 'white', padding: '13px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
                                                 onClick={() => router.push(`/armada/${busId}/seats?routeId=${route.id}&tujuan=${encodeURIComponent(price.tujuan)}&harga=${price.harga}&date=${date}`)}>
-                                                <span style={{ fontSize: 14, color: '#333' }}>{route.kota_asal} - {price.tujuan}</span>
+                                                <span style={{ fontSize: 14, color: '#333' }}>
+                                                    {agent ? agent.location : route.kota_asal} - {price.tujuan}
+                                                </span>
                                                 <span style={{ fontSize: 14, fontWeight: 600 }}>{formatCurrency(price.harga)}</span>
                                             </div>
                                         ))}

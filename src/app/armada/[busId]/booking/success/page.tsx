@@ -54,7 +54,7 @@ function SuccessPageContent() {
             `🎫 *TIKET BUS - OPERASIONAL*\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `🚌 *Bus:* ${busKode} (${busArah})\n` +
-            `📍 *Rute:* ${kotaAsal} → ${kotaTujuan}\n` +
+            `📍 *Rute:* ${agentLocation} → ${tujuan}\n` +
             `📅 *Tgl:* ${tgl} | ${jamBerangkat}\n` +
             `💺 *Kursi:* No. ${nomor}\n` +
             `👤 *Penumpang:* ${passenger}\n` +
@@ -151,8 +151,8 @@ function SuccessPageContent() {
                 {/* Bus info */}
                 <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed #e0e0e0' }}>
                     <p style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>{busArah} / {busKode}</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>{busNama}</p>
-                    <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{kotaAsal} → {tujuan} • {jamBerangkat}</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>{busNama.replace(/^[^-]+/, agentLocation)}</p>
+                    <p style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{agentLocation} → {tujuan} • {jamBerangkat}</p>
                 </div>
 
                 {/* Ticket details */}

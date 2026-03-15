@@ -21,7 +21,7 @@ export function formatTicketMessage(
         `🎫 *TIKET BUS - OPERASIONAL*\n` +
         `━━━━━━━━━━━━━━━━━━\n` +
         `🚌 *Bus:* ${booking.buses?.kode || ''} (${booking.buses?.arah || ''})\n` +
-        `📍 *Rute:* ${booking.routes?.kota_asal || ''} → ${booking.routes?.kota_tujuan || ''}\n` +
+        `📍 *Rute:* ${booking.agent_location || booking.routes?.kota_asal || ''} → ${booking.tujuan || booking.routes?.kota_tujuan || ''}\n` +
         (via ? `🛣️  *Via:* ${via}\n` : '') +
         `📅 *Tgl:* ${tgl} | ${booking.buses?.jam_berangkat || ''}\n` +
         `💺 *Kursi:* No. ${booking.nomor_kursi}\n` +
