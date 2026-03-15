@@ -321,7 +321,7 @@ function BusDetailContent() {
                                 <span style={{ color: '#888' }}>Ketuk untuk detail penunpang</span>
                             </div>
                             {manifests.map(b => {
-                                const isOwnBooking = agent && b.agent_phone === agent.phone;
+                                const isOwnBooking = agent && (b.agent_phone === agent.phone || b.agent_name === agent.name);
                                 return (
                                     <div
                                         key={b.id}

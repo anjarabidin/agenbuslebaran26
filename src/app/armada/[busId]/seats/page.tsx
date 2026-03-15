@@ -157,8 +157,9 @@ function SeatsPageContent() {
         if (!agent) return;
 
         if (seat.status === 'booked') {
-            const { data } = await supabase.from('bookings').select('agent_phone').eq('seat_id', seat.id).eq('status', 'confirmed').single();
-            if (data && data.agent_phone !== agent.phone) {
+            const { data } = await supabase.from('bookings').select('agent_phone, agent_name').eq('seat_id', seat.id).eq('status', 'confirmed').single();
+            // Cek nomor HP (utama) atau cek nama (fallback untuk session lama)
+            if (data && data.agent_phone !== agent.phone && data.agent_name !== agent.name) {
                 setError('Hanya agen yang memesan yang dapat melihat detail kursi ini');
                 setTimeout(() => setError(''), 3000);
                 return;
