@@ -164,11 +164,23 @@ export function buildTicketBytes(data: TicketData): Uint8Array {
 
     line(divider(w));
 
+    // QR Code (ESC/POS GS(k) native QR print command)
+    // Only print if we have a bookingId
+    if (data.bookingId) {
+        parts.push(ESC_POS.ALIGN_CENTER);
+        parts.push(...buildQRCodeBytes(data.bookingId, data.paperWidth === 80 ? 8 : 6));
+        parts.push(ESC_POS.LF);
+    }
+
+    line(divider(w));
+
     // Agent
     parts.push(ESC_POS.ALIGN_CENTER);
     line(`Agen: ${data.agentName}`);
     if (data.bookingId) {
-        line(`ID: ${data.bookingId.slice(0, 16).toUpperCase()}`);
+        // Print short ID as text below QR
+        const shortId = data.bookingId.slice(0, 16).toUpperCase();
+        line(shortId);
     }
     line('Terima kasih!');
 
@@ -177,6 +189,32 @@ export function buildTicketBytes(data: TicketData): Uint8Array {
     parts.push(ESC_POS.CUT);
 
     return concat(...parts);
+}
+
+/**
+ * Build ESC/POS QR Code bytes using GS ( k command sequence.
+ * size: module size 1–16 (4=small, 6=medium, 8=large)
+ */
+function buildQRCodeBytes(data: string, size: number = 6): Uint8Array[] {
+    const dataBytes = new TextEncoder().encode(data);
+    const dataLen = dataBytes.length + 3; // cn(1) + fn(1) + m(1) + data
+
+    // pL and pH encode dataLen as little-endian 16-bit
+    const pL = dataLen & 0xFF;
+    const pH = (dataLen >> 8) & 0xFF;
+
+    return [
+        // 1. Set QR model 2 (most compatible)
+        new Uint8Array([0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),
+        // 2. Set module size (1-16)
+        new Uint8Array([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, size]),
+        // 3. Set error correction level M (50 = M)
+        new Uint8Array([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31]),
+        // 4. Store QR data: GS ( k pL pH 0x31 0x50 0x30 [data]
+        new Uint8Array([0x1D, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30, ...dataBytes]),
+        // 5. Print QR from buffer
+        new Uint8Array([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30]),
+    ];
 }
 
 // ===== Web Bluetooth Connection =====
