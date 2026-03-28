@@ -10,6 +10,8 @@ import { supabase } from '@/lib/supabase';
 import { getSeats, lockSeat, releaseSeat, cancelBooking } from '@/lib/db';
 import type { Seat, Bus, Booking } from '@/types';
 
+const MAX_SEATS = 5;
+
 // Popup info kursi terisi
 function SeatInfoPopup({ seat, booking, onClose }: { seat: Seat; booking: Booking | null; onClose: () => void; }) {
     const [cancelling, setCancelling] = useState(false);
@@ -115,8 +117,6 @@ function SeatInfoPopup({ seat, booking, onClose }: { seat: Seat; booking: Bookin
 }
 
 // ===== Wrapper for Suspense =====
-
-// ===== Wrapper for Suspense =====
 export default function SeatsPage() {
     return (
         <Suspense fallback={<div style={{ padding: 20, textAlign: 'center', color: '#888' }}>Memuat denah kursi...</div>}>
@@ -131,7 +131,6 @@ function SeatsPageContent() {
     const searchParams = useSearchParams();
     const busId = params.busId as string;
 
-    // State yang dependen dengan searchParams dialihkan ke useEffect
     const [routeId, setRouteId] = useState('');
     const [tujuan, setTujuan] = useState('');
     const [harga, setHarga] = useState(0);
@@ -147,11 +146,13 @@ function SeatsPageContent() {
     const [agent, setAgent] = useState<{ name: string; location: string; phone: string } | null>(null);
     const [bus, setBus] = useState<Bus | null>(null);
     const [seats, setSeats] = useState<Seat[]>([]);
-    const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
+    // Multi-seat: array of selected seats (max 5)
+    const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
     const [loading, setLoading] = useState(true);
     const [locking, setLocking] = useState(false);
     const [error, setError] = useState('');
-    const [lockedBySelf, setLockedBySelf] = useState<string | null>(null);
+    // Track all seat IDs locked by self for cleanup
+    const lockedBySelfIds = React.useRef<Set<string>>(new Set());
     const isNavigatingToPurchase = React.useRef(false);
 
     const [popupSeat, setPopupSeat] = useState<Seat | null>(null);
@@ -184,19 +185,21 @@ function SeatsPageContent() {
         fetchSeats();
         const channel = supabase.channel(`seats:${busId}:${routeId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'seats', filter: `bus_id=eq.${busId}` },
-                () => fetchSeats(true)) // Refresh tanpa muncul 'Memuat...'
+                () => fetchSeats(true))
             .subscribe();
         return () => { supabase.removeChannel(channel); };
     }, [busId, routeId, fetchSeats]);
 
+    // Release all locked seats on unmount (if not navigating to purchase)
     useEffect(() => {
         return () => {
-            // Hanya lepas seat jika TIDAK sedang lanjut ke pembayaran
-            if (lockedBySelf && !isNavigatingToPurchase.current) {
-                releaseSeat(lockedBySelf).catch(() => { });
+            if (!isNavigatingToPurchase.current) {
+                lockedBySelfIds.current.forEach(id => {
+                    releaseSeat(id).catch(() => { });
+                });
             }
         };
-    }, [lockedBySelf]);
+    }, []);
 
     async function showBookedInfo(seat: Seat) {
         setPopupSeat(seat);
@@ -226,9 +229,23 @@ function SeatsPageContent() {
         }
         setError('');
 
-        if (lockedBySelf && lockedBySelf !== seat.id) {
-            await releaseSeat(lockedBySelf);
-            setLockedBySelf(null);
+        // Check if already selected — deselect on tap
+        const alreadySelected = selectedSeats.find(s => s.id === seat.id);
+        if (alreadySelected) {
+            // Deselect: release the lock
+            setLocking(true);
+            await releaseSeat(seat.id).catch(() => {});
+            setLocking(false);
+            lockedBySelfIds.current.delete(seat.id);
+            setSelectedSeats(prev => prev.filter(s => s.id !== seat.id));
+            return;
+        }
+
+        // Check max seats
+        if (selectedSeats.length >= MAX_SEATS) {
+            setError(`Maksimal ${MAX_SEATS} kursi sekaligus`);
+            setTimeout(() => setError(''), 2500);
+            return;
         }
 
         setLocking(true);
@@ -240,18 +257,17 @@ function SeatsPageContent() {
             setTimeout(() => setError(''), 2500);
             return;
         }
-        setLockedBySelf(seat.id);
-        setSelectedSeat(seat);
+        lockedBySelfIds.current.add(seat.id);
+        setSelectedSeats(prev => [...prev, seat]);
     }
 
     async function handleSeatDoubleClick(seat: Seat) {
         if (!agent) return;
 
         if (seat.status === 'locked' && seat.locked_by_agent === agent.name) {
-            // Batalkan lock (proses) jika double-click
             await releaseSeat(seat.id);
-            setLockedBySelf(null);
-            setSelectedSeat(null);
+            lockedBySelfIds.current.delete(seat.id);
+            setSelectedSeats(prev => prev.filter(s => s.id !== seat.id));
             return;
         }
 
@@ -266,35 +282,39 @@ function SeatsPageContent() {
     }
 
     function handleContinue() {
-        if (!selectedSeat) return;
+        if (selectedSeats.length === 0) return;
         isNavigatingToPurchase.current = true;
+        // Pass all selected seat IDs as comma-separated, and their seat numbers
+        const seatIds = selectedSeats.map(s => s.id).join(',');
+        const seatNomors = selectedSeats.map(s => s.nomor_kursi).join(',');
         router.push(
-            `/armada/${busId}/booking?seatId=${selectedSeat.id}&routeId=${routeId}&tujuan=${encodeURIComponent(tujuan)}&harga=${harga}&nomor=${selectedSeat.nomor_kursi}&date=${date}`
+            `/armada/${busId}/booking?seatIds=${seatIds}&routeId=${routeId}&tujuan=${encodeURIComponent(tujuan)}&harga=${harga}&nomors=${seatNomors}&date=${date}`
         );
     }
 
     const displayDate = date ? format(new Date(date + 'T00:00:00'), "EEEE, d MMMM yyyy", { locale: idLocale }) : '';
 
     function getSeatStyle(seat: Seat) {
-        const isSelected = selectedSeat?.id === seat.id;
-        if (seat.status === 'booked') return { fill: '#e74c3c', stroke: '#c0392b' }; // Merah (Terisi)
+        const isSelected = selectedSeats.some(s => s.id === seat.id);
+        if (seat.status === 'booked') return { fill: '#e74c3c', stroke: '#c0392b' };
         if (seat.status === 'locked') {
-            if (seat.locked_by_agent === agent?.name) return { fill: '#8B1A1A', stroke: '#8B1A1A' }; // Maroon (Dipilih diri sendiri)
-            return { fill: '#F39C12', stroke: '#D35400' }; // Orange (Diproses orang lain)
+            if (seat.locked_by_agent === agent?.name) return { fill: '#8B1A1A', stroke: '#8B1A1A' };
+            return { fill: '#F39C12', stroke: '#D35400' };
         }
         if (isSelected) return { fill: '#8B1A1A', stroke: '#8B1A1A' };
-        return { fill: '#EFEFEF', stroke: '#CCCCCC' }; // Kembali ke Abu-abu (Tersedia)
+        return { fill: '#EFEFEF', stroke: '#CCCCCC' };
     }
 
-    function getNumberColor(seat: Seat) {
-        if (seat.status === 'booked' || seat.status === 'locked' || selectedSeat?.id === seat.id) return 'white';
-        return '#333';
+    function getSeatLabel(seat: Seat) {
+        if (seat.status === 'booked') return '🔒';
+        if (seat.status === 'locked' && seat.locked_by_agent !== agent?.name) return 'proses';
+        return formatCurrency(harga).replace('Rp\u00a0', '').replace('.000', 'k');
     }
 
     function renderSingleSeat(seat: Seat) {
         const sStyle = getSeatStyle(seat);
-        const isDefault = sStyle.fill === '#27AE60' || sStyle.fill === '#C0392B' || sStyle.fill === '#e74c3c' || sStyle.fill === '#8B1A1A' || sStyle.fill === '#F39C12';
-        const numColor = isDefault ? 'white' : '#333';
+        const isColored = sStyle.fill !== '#EFEFEF';
+        const numColor = isColored ? 'white' : '#333';
 
         return (
             <div
@@ -302,7 +322,7 @@ function SeatsPageContent() {
                 className="seat-item"
                 onClick={() => !locking && handleSeatClick(seat)}
                 onDoubleClick={() => !locking && handleSeatDoubleClick(seat)}
-                style={{ opacity: locking && selectedSeat?.id !== seat.id ? 0.7 : 1, cursor: 'pointer', userSelect: 'none' }}
+                style={{ opacity: locking && !selectedSeats.find(s => s.id === seat.id) ? 0.7 : 1, cursor: 'pointer', userSelect: 'none' }}
             >
                 <svg width="50" height="50" viewBox="0 0 56 56">
                     <rect x="8" y="6" width="40" height="26" rx="6" fill={sStyle.fill} stroke={sStyle.stroke} strokeWidth="1.5" />
@@ -328,24 +348,26 @@ function SeatsPageContent() {
         return renderSingleSeat(seat);
     }
 
-    function getSeatLabel(seat: Seat) {
-        if (seat.status === 'booked') return '🔒';
-        if (seat.status === 'locked' && seat.locked_by_agent !== agent?.name) return 'proses';
-        return formatCurrency(harga).replace('Rp\u00a0', '').replace('.000', 'k');
-    }
+    const totalHarga = selectedSeats.length * harga;
 
     return (
         <div style={{ background: 'var(--gray-bg)', minHeight: '100vh' }}>
             {/* Header */}
             <div style={{ background: 'white', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 50 }}>
-                <button onClick={() => { if (lockedBySelf) releaseSeat(lockedBySelf).catch(() => { }); router.back(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <button onClick={() => {
+                    lockedBySelfIds.current.forEach(id => releaseSeat(id).catch(() => {}));
+                    router.back();
+                }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
                     <X size={20} color="#333" />
                 </button>
-                <div>
-                    <p style={{ fontSize: 13, color: '#888' }}>
-                        {displayDate}
-                    </p>
+                <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 13, color: '#888' }}>{displayDate}</p>
                 </div>
+                {selectedSeats.length > 0 && (
+                    <span style={{ background: '#8B1A1A', color: 'white', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 700 }}>
+                        {selectedSeats.length}/{MAX_SEATS} kursi
+                    </span>
+                )}
             </div>
 
             {/* Bus Info */}
@@ -359,7 +381,7 @@ function SeatsPageContent() {
             {/* Route info */}
             <div style={{ background: 'white', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', marginBottom: 8, borderBottom: '1px solid var(--border)' }}>
                 <span style={{ fontSize: 14, color: '#555' }}>{tujuan}</span>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{formatCurrency(harga)}</span>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{formatCurrency(harga)}/kursi</span>
             </div>
 
             {/* Deck label */}
@@ -368,8 +390,6 @@ function SeatsPageContent() {
                     D-BAWAH
                 </span>
             </div>
-
-
 
             {/* Error */}
             {error && (
@@ -384,7 +404,7 @@ function SeatsPageContent() {
                 <div style={{ padding: '40px', textAlign: 'center', color: '#aaa' }} className="animate-pulse">Memuat kursi...</div>
             ) : (
                 <div className="seat-grid-container" style={{ padding: '4px', maxWidth: 400, margin: '0 auto' }}>
-                    {/* Baris Supir / TL / Co-Driver Sejejer */}
+                    {/* Baris Supir / TL / Co-Driver */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 56px) 1fr repeat(2, 56px)', gap: 4, marginBottom: 8 }}>
                         <div style={{ background: '#45B3E7', color: 'white', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, height: 44 }}>
                             CO DRIVER
@@ -459,31 +479,34 @@ function SeatsPageContent() {
                 ))}
             </div>
 
-            <div style={{ height: 90 }} />
+            <div style={{ height: 100 }} />
 
             {/* Bottom CTA */}
             <div className="bottom-bar">
-                {selectedSeat ? (
+                {selectedSeats.length > 0 ? (
                     <>
                         <div style={{ flex: 1 }}>
-                            <p style={{ fontSize: 12, color: '#888' }}>Kursi dipilih</p>
-                            <p style={{ fontSize: 16, fontWeight: 700, color: '#8B1A1A' }}>No. {selectedSeat.nomor_kursi}</p>
+                            <p style={{ fontSize: 11, color: '#888' }}>{selectedSeats.length} kursi dipilih</p>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#8B1A1A' }}>
+                                No. {selectedSeats.map(s => s.nomor_kursi).join(', ')}
+                            </p>
+                            <p style={{ fontSize: 12, color: '#555' }}>{formatCurrency(totalHarga)}</p>
                         </div>
                         <button
                             style={{ background: 'var(--maroon)', color: 'white', border: 'none', borderRadius: 10, padding: '14px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
                             onClick={handleContinue}
                         >
-                            LANJUTKAN PEMBELIAN
+                            LANJUTKAN →
                         </button>
                     </>
                 ) : (
                     <button className="btn-primary" disabled>
-                        PILIH KURSI TERLEBIH DAHULU
+                        PILIH KURSI (MAKS {MAX_SEATS})
                     </button>
                 )}
             </div>
 
-            {/* Popup info kursi terisi (mode beli only) */}
+            {/* Popup info kursi terisi */}
             {popupSeat && (
                 <SeatInfoPopup seat={popupSeat} booking={popupBooking} onClose={() => { setPopupSeat(null); setPopupBooking(null); }} />
             )}
